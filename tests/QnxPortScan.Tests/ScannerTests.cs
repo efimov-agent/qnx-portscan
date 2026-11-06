@@ -119,6 +119,18 @@ public class ScannerTests
             Directory.Delete(root, recursive: true);
         }
     }
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Multiline_if_directive_is_joined_for_lf_and_crlf(string eol)
+    {
+        var guarded = "#if defined(__linux__) \\" + eol + "    && !defined(FOO)" + eol + "epoll_wait(1);" + eol + "#endif";
+        Assert.Empty(_scanner.ScanText("a.c", guarded));
+
+        var qnx = "#if defined(__QNX__) \\" + eol + "    || defined(__linux__)" + eol + "epoll_wait(1);" + eol + "#endif";
+        var f = Assert.Single(_scanner.ScanText("a.c", qnx));
+        Assert.Equal(3, f.Line);
+    }
 }
 
 public class PlatformFileDetectorTests
@@ -145,4 +157,5 @@ public class PlatformFileDetectorTests
         var f = Assert.Single(s.ScanText("src/ae_epoll.c", "epoll_wait(1);", new ScanOptions { IncludeGuarded = true }));
         Assert.Equal("platform-specific file (epoll)", f.GuardReason);
     }
+
 }

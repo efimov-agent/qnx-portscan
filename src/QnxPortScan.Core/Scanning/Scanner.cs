@@ -7,7 +7,7 @@ using QnxPortScan.Core.Rules;
 
 namespace QnxPortScan.Core.Scanning;
 
-public sealed partial class Scanner
+public sealed class Scanner
 {
     private readonly RuleMatcher _matcher;
     private readonly ILogger<Scanner> _logger;

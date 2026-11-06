@@ -76,4 +76,46 @@ public class LexerTests
         Assert.Contains("epoll_wait", v.Literals);
         Assert.Contains("int b;", v.Code);
     }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Positions_and_line_text_survive_continuations(string eol)
+    {
+        var src = "int a; // c \\" + eol + "more" + eol + "epoll_wait(x);";
+        var v = CppSourceView.Parse(src);
+        Assert.Equal(3, v.LineCount);
+        var offset = src.IndexOf("epoll_wait", StringComparison.Ordinal);
+        Assert.Equal((3, 1), v.GetPosition(offset));
+        Assert.Equal("more", v.GetLineText(2));
+        Assert.Equal("epoll_wait(x);", v.GetLineText(3));
+        Assert.Equal(src.Length, v.Code.Length);
+    }
+
+    [Theory]
+    [InlineData("int a; // c \\")]
+    [InlineData("int a; // c \\\r")]
+    [InlineData("puts(\"abc \\")]
+    [InlineData("puts(\"abc \\\r")]
+    public void Backslash_at_end_of_file_does_not_throw(string src)
+    {
+        var v = CppSourceView.Parse(src);
+        Assert.Equal(src.Length, v.Code.Length);
+        Assert.Equal(1, v.LineCount);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Double_backslash_before_newline_continues_comment_but_not_closed_string(string eol)
+    {
+        var src = "int a; // c \\\\" + eol + "epoll_wait(x);";
+        var v = CppSourceView.Parse(src);
+        // In a // comment every backslash right before a newline continues it, as in the C preprocessor.
+        Assert.DoesNotContain("epoll_wait", v.Code);
+
+        var str = "puts(\"a\\\\\"); " + eol + "epoll_wait(x);";
+        var sv = CppSourceView.Parse(str);
+        Assert.Contains("epoll_wait(x);", sv.Code);
+    }
 }

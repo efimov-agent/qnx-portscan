@@ -31,11 +31,14 @@ Severity: **error** — not documented in QNX 8.0; **warning** — exists with c
 ## Output
 - Markdown: summary per rule, "how to port" section, findings per file.
 - SARIF 2.1.0 for GitHub code scanning / VS Code SARIF viewer.
+- With `--out`, the report goes to the file and a one-line `Wrote <path>` summary goes to stdout.
 - Exit code: 0 ok, 1 findings at `--fail-on` level, 2 usage error, 3 I/O or rules-file error.
 
 ## Limits
 Text-level analysis, not a compiler: project-specific config macros (e.g. `HAVE_BACKTRACE`) are not evaluated,
 and "not documented" is not proof that a symbol is absent from SDP headers. Confirm with `qcc` on a real SDP.
+A backslash followed by trailing spaces before the newline is not treated as a line continuation
+(GCC accepts it with a warning), so such a continued `//` comment or directive is read as ending there.
 
 ## Develop
-`./check.sh` — build, 58 unit tests, CLI smoke test.
+`./check.sh` — build, 72 unit tests, CLI smoke test.
