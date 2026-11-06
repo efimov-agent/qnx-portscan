@@ -61,4 +61,4 @@ How much of a Linux→QNX port is mechanical and knowable in advance, and how QN
 ## Links
 - Repository: `<github-repo-url>`
 - Demo reports: `docs/demo/`
-- Video: `<youtube-url>`
+- Video: `<youtube-url>` (recording storyboard: `docs/demo-script.md`)
