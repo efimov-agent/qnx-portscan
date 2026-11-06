@@ -53,4 +53,27 @@ public class LexerTests
         Assert.Equal((2, 2), v.GetPosition(3));
         Assert.Equal("bc", v.GetLineText(2));
     }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Line_comment_continuation_handles_lf_and_crlf(string eol)
+    {
+        var src = "int a; // note \\" + eol + "epoll_wait(x);" + eol + "int b;";
+        var v = CppSourceView.Parse(src);
+        Assert.DoesNotContain("epoll_wait", v.Code);
+        Assert.Contains("int b;", v.Code);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void String_continuation_handles_lf_and_crlf(string eol)
+    {
+        var src = "puts(\"a \\" + eol + "epoll_wait(\"); int b;";
+        var v = CppSourceView.Parse(src);
+        Assert.DoesNotContain("epoll_wait", v.Code);
+        Assert.Contains("epoll_wait", v.Literals);
+        Assert.Contains("int b;", v.Code);
+    }
 }

@@ -69,8 +69,12 @@ public sealed class CppSourceView
                 var end = i0;
                 while (end < n && text[end] != '\n')
                 {
-                    // Backslash-newline continues a // comment.
-                    if (text[end] == '\\' && end + 1 < n && text[end + 1] == '\n') end++;
+                    // Backslash-newline (LF or CRLF) continues a // comment.
+                    if (text[end] == '\\')
+                    {
+                        var after = end + 1 < n && text[end + 1] == '\r' ? end + 2 : end + 1;
+                        if (after < n && text[after] == '\n') end = after;
+                    }
                     end++;
                 }
                 Blank(code, i0, end);
@@ -160,7 +164,12 @@ public sealed class CppSourceView
         while (i < text.Length)
         {
             var ch = text[i];
-            if (ch == '\\') { i += 2; continue; }
+            if (ch == '\\')
+            {
+                // Skip the escaped char; treat backslash-CRLF as a single line continuation.
+                i += i + 2 < text.Length && text[i + 1] == '\r' && text[i + 2] == '\n' ? 3 : 2;
+                continue;
+            }
             if (ch == quote) return i + 1;
             if (ch == '\n') return i; // unterminated literal: stop at end of line
             i++;

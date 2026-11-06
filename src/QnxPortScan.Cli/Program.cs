@@ -140,19 +140,20 @@ public static class Program
             .Split('+')[0] ?? "0.0.0";
         var title = $"QNX portability report: {Path.GetFileName(result.Root.TrimEnd('/'))}";
 
+        var summary = $"({result.Findings.Count} findings in {result.FilesScanned} files)";
         switch (opts.Format)
         {
             case "md":
-                await Emit(MarkdownReporter.Render(result, title), opts.Out, stdout, ct);
+                await Emit(MarkdownReporter.Render(result, title), opts.Out, summary, stdout, ct);
                 break;
             case "sarif":
-                await Emit(SarifReporter.Render(result, catalog, version), opts.Out, stdout, ct);
+                await Emit(SarifReporter.Render(result, catalog, version), opts.Out, summary, stdout, ct);
                 break;
             case "both":
                 var basePath = opts.Out ?? "qnx-portscan";
                 await File.WriteAllTextAsync(basePath + ".md", MarkdownReporter.Render(result, title), ct);
                 await File.WriteAllTextAsync(basePath + ".sarif", SarifReporter.Render(result, catalog, version), ct);
-                await stdout.WriteLineAsync($"Wrote {basePath}.md and {basePath}.sarif ({result.Findings.Count} findings in {result.FilesScanned} files)");
+                await stdout.WriteLineAsync($"Wrote {basePath}.md and {basePath}.sarif {summary}");
                 break;
         }
 
@@ -165,9 +166,14 @@ public static class Program
         return threshold is { } t && result.Findings.Any(f => f.Severity >= t) ? ExitFindings : ExitOk;
     }
 
-    private static async Task Emit(string content, string? outPath, TextWriter stdout, CancellationToken ct)
+    private static async Task Emit(string content, string? outPath, string summary, TextWriter stdout, CancellationToken ct)
     {
-        if (outPath is null) await stdout.WriteAsync(content);
-        else await File.WriteAllTextAsync(outPath, content, ct);
+        if (outPath is null)
+        {
+            await stdout.WriteAsync(content);
+            return;
+        }
+        await File.WriteAllTextAsync(outPath, content, ct);
+        await stdout.WriteLineAsync($"Wrote {outPath} {summary}");
     }
 }

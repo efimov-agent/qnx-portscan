@@ -22,7 +22,7 @@ public static class SarifReporter
             var rule = new JsonObject
             {
                 ["id"] = r.Id,
-                ["name"] = ToPascal(r.Title),
+                ["name"] = ToPascal(r.Title, r.Id),
                 ["shortDescription"] = new JsonObject { ["text"] = r.Title },
                 ["fullDescription"] = new JsonObject { ["text"] = r.Message },
                 ["help"] = new JsonObject
@@ -115,7 +115,10 @@ public static class SarifReporter
 
     private static string EnsureTrailingSlash(string p) => p.EndsWith('/') ? p : p + "/";
 
-    private static string ToPascal(string title) =>
-        string.Concat(title.Split([' ', '-', '/', '(', ')', ',', '.', '\''], StringSplitOptions.RemoveEmptyEntries)
+    private static string ToPascal(string title, string fallback)
+    {
+        var name = string.Concat(title.Split([' ', '-', '/', '(', ')', ',', '.', '\''], StringSplitOptions.RemoveEmptyEntries)
             .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+        return name.Length > 0 ? name : fallback;
+    }
 }

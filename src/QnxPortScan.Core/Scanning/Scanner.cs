@@ -18,14 +18,12 @@ public sealed partial class Scanner
         _logger = logger ?? NullLogger<Scanner>.Instance;
     }
 
-    [GeneratedRegex(@"\b(__QNX__|__QNXNTO__)\b")]
-    private static partial Regex QnxGuardRegex();
-
     /// <summary>Scans a single in-memory source. Path is used for reporting only.</summary>
     public IReadOnlyList<Finding> ScanText(string relativePath, string text, ScanOptions? options = null)
     {
-        var (findings, defined) = ScanCore(relativePath, text, options ?? new ScanOptions());
-        return Order(ApplyProjectDefinitions(findings, defined, options ?? new ScanOptions())).ToList();
+        options ??= new ScanOptions();
+        var (findings, defined) = ScanCore(relativePath, text, options);
+        return Order(ApplyProjectDefinitions(findings, defined, options)).ToList();
     }
 
     private (List<Finding> Findings, HashSet<string> DefinedNames) ScanCore(string relativePath, string text, ScanOptions options)
@@ -86,7 +84,7 @@ public sealed partial class Scanner
             var text = await File.ReadAllTextAsync(root, ct);
             var single = ScanText(Path.GetFileName(root), text, options);
             return new ScanResult(Path.GetDirectoryName(root)!, single, 1,
-                QnxGuardRegex().IsMatch(text) ? [Path.GetFileName(root)] : []);
+                PreprocessorTracker.QnxMacroRegex().IsMatch(text) ? [Path.GetFileName(root)] : []);
         }
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
 
@@ -108,7 +106,7 @@ public sealed partial class Scanner
                     return;
                 }
                 var text = await File.ReadAllTextAsync(file, token);
-                if (QnxGuardRegex().IsMatch(text)) qnxGuarded.Add(rel);
+                if (PreprocessorTracker.QnxMacroRegex().IsMatch(text)) qnxGuarded.Add(rel);
                 var (found, names) = ScanCore(rel, text, options);
                 foreach (var f in found) all.Add(f);
                 foreach (var n in names) defined.TryAdd(n, 0);
@@ -151,7 +149,7 @@ public sealed partial class Scanner
             {
                 var name = Path.GetFileName(sub);
                 if (excludedDirs.Contains(name)) continue;
-                if (new DirectoryInfo(sub).LinkTarget is not null) continue; // no symlink loops
+                if (new DirectoryInfo(sub).LinkTarget is not null) continue; // skip all symlinked dirs (avoids loops and escaping the root)
                 if (IsExcluded(root, sub + "/", options)) continue;
                 pending.Push(sub);
             }

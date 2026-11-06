@@ -21,8 +21,9 @@ public static partial class PreprocessorTracker
     [GeneratedRegex(@"^\s*#\s*(?<dir>ifdef|ifndef|if|elif|elifdef|elifndef|else|endif)\b(?<rest>.*)$")]
     private static partial Regex DirectiveRegex();
 
+    /// <summary>Matches the QNX predefined macros; shared with the scanner's project-level guard detection.</summary>
     [GeneratedRegex(@"\b(__QNX__|__QNXNTO__)\b")]
-    private static partial Regex QnxMacroRegex();
+    internal static partial Regex QnxMacroRegex();
 
     public static LineContext[] Analyze(CppSourceView view)
     {

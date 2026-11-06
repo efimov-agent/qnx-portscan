@@ -7,6 +7,12 @@ namespace QnxPortScan.Core.Scanning;
 /// <summary>Compiles rules to regexes and matches them against a parsed source view.</summary>
 public sealed class RuleMatcher
 {
+    /// <summary>
+    /// Upper bound (chars) when searching for the ')' closing a function signature. Bounds the cost of
+    /// pathological input (e.g. an unbalanced '(' in a huge file) while covering any realistic declaration.
+    /// </summary>
+    private const int MaxSignatureScan = 8000;
+
     private static readonly Regex IncludeRegex =
         new(@"^[ \t]*#[ \t]*include[ \t]*[<""](?<h>[^>""]+)[>""]", RegexOptions.Multiline | RegexOptions.Compiled);
 
@@ -131,7 +137,7 @@ public sealed class RuleMatcher
         // Find the matching ')' and look at what follows: '{' means a definition.
         var depth = 0;
         var i = openParen;
-        for (; i < code.Length && i < openParen + 8000; i++)
+        for (; i < code.Length && i < openParen + MaxSignatureScan; i++)
         {
             if (code[i] == '(') depth++;
             else if (code[i] == ')' && --depth == 0) break;
