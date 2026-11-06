@@ -1,0 +1,21 @@
+// Provisional catalog; verified against QNX SDP 8.0 docs in research/qnx-api-verification.md.
+[
+  {
+    "id": "QNX001", "title": "Linux kernel headers", "kind": "Include", "severity": "Error", "category": "headers",
+    "patterns": ["linux/", "asm/"],
+    "message": "Headers under <linux/...> and <asm/...> describe the Linux kernel ABI and do not exist on QNX Neutrino.",
+    "suggestion": "Remove the include or guard it with #ifdef __linux__; use POSIX or QNX headers (<sys/neutrino.h>, <devctl.h>) instead."
+  },
+  {
+    "id": "QNX002", "title": "epoll event loop", "kind": "Call", "severity": "Error", "category": "io",
+    "patterns": ["epoll_create", "epoll_create1", "epoll_ctl", "epoll_wait", "epoll_pwait"],
+    "message": "epoll is Linux-specific.",
+    "suggestion": "Use poll()/select() for portable code, or ionotify() with pulses delivered to a channel for an event-driven QNX design."
+  },
+  {
+    "id": "QNX003", "title": "epoll header", "kind": "Include", "severity": "Error", "category": "headers",
+    "patterns": ["sys/epoll.h"],
+    "message": "<sys/epoll.h> is Linux-specific.",
+    "suggestion": "Switch the event loop to poll()/select() or ionotify() + pulses."
+  }
+]

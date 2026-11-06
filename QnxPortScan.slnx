@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QnxPortScan.Cli/QnxPortScan.Cli.csproj" />
+    <Project Path="src/QnxPortScan.Core/QnxPortScan.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/QnxPortScan.Tests/QnxPortScan.Tests.csproj" />
+  </Folder>
+</Solution>
