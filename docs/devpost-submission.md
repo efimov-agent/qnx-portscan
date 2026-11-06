@@ -24,8 +24,8 @@ dotnet run --project src/QnxPortScan.Cli -- scan ~/src/libuv --exclude test/
 dotnet run --project src/QnxPortScan.Cli -- scan . --format sarif --out qnx.sarif --fail-on error
 ```
 
-## Demo — four real projects
-Run against four well-known open-source codebases (default settings, shallow clone):
+## Demo — seven real projects
+Run against seven well-known open-source codebases (default settings, shallow clone):
 
 | Project | Files | Findings | Errors |
 |---|---:|---:|---:|
@@ -33,8 +33,11 @@ Run against four well-known open-source codebases (default settings, shallow clo
 | redis | 856 | 59 | 44 |
 | mosquitto | 605 | 7 | 2 |
 | libzmq | 465 | 18 | 13 |
+| nginx | 411 | 27 | 25 |
+| sqlite | 359 | 9 | 7 |
+| curl | 1067 | 27 | 18 |
 
-Reports are generated, not hand-edited (see `docs/demo/`). libuv and mosquitto already carry partial QNX support, which is why their counts are lower — the scanner still surfaces the Linux-only call sites a port must revisit. Findings are substantive: `epoll`/`kqueue` event loops, `cpu_set_t` affinity, raw `syscall()`, glibc `backtrace()`, `/proc` reads, `getrandom`.
+Reports are generated, not hand-edited (see `docs/demo/`). libuv and mosquitto already carry partial QNX support, which is why their counts are lower — the scanner still surfaces the Linux-only call sites a port must revisit. Findings are substantive: `epoll`/`kqueue` event loops and `timerfd` (curl), `cpu_set_t` affinity, raw `syscall()`, `statfs()`, `prctl()`, `O_PATH` (nginx), glibc `backtrace()` and `/proc` reads (sqlite), `getrandom`. Portable code stays quiet: sqlite yields just 9 findings over 359 files, almost all optional diagnostics — the low-false-positive signal a porting team wants.
 
 ## How we built it
 - **.NET 10 / C#**, clean architecture: a line-and-token lexer that strips comments and string literals (handles raw strings and digit separators), a preprocessor-aware guard tracker, a rules engine, and Markdown/SARIF emitters.
