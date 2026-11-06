@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Console;
@@ -13,6 +15,7 @@ public static class Program
     public const int ExitOk = 0;
     public const int ExitFindings = 1;
     public const int ExitUsage = 2;
+    public const int ExitIoError = 3;
 
     private const string Usage = """
         qnx-portscan — find Linux-only APIs in C/C++ code and suggest QNX Neutrino replacements.
@@ -29,19 +32,40 @@ public static class Program
           --include-guarded        Also report code inside Linux-only #ifdef branches (as notes)
           --fail-on error|warning|none   Exit 1 if findings at or above this level (default: none)
           -v, --verbose            Log progress to stderr
+
+        Exit codes: 0 ok, 1 findings at --fail-on level, 2 usage error, 3 I/O or rules file error.
         """;
 
     public static async Task<int> Main(string[] args)
     {
-        return await RunAsync(args, Console.Out, Console.Error);
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cts.Cancel();
+        };
+        try
+        {
+            return await RunAsync(args, Console.Out, Console.Error, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            await Console.Error.WriteLineAsync("cancelled");
+            return 130;
+        }
     }
 
     public static async Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr, CancellationToken ct = default)
     {
-        if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+        if (args.Length == 0)
+        {
+            await stderr.WriteLineAsync(Usage);
+            return ExitUsage;
+        }
+        if (args[0] is "-h" or "--help" or "help")
         {
             await stdout.WriteLineAsync(Usage);
-            return args.Length == 0 ? ExitUsage : ExitOk;
+            return ExitOk;
         }
 
         CliOptions opts;
@@ -56,6 +80,21 @@ public static class Program
             return ExitUsage;
         }
 
+        try
+        {
+            return await ExecuteAsync(opts, stdout, stderr, ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
+                                       or InvalidOperationException or ArgumentException)
+        {
+            // DirectoryNotFoundException/FileNotFoundException are IOExceptions.
+            await stderr.WriteLineAsync($"error: {ex.Message}");
+            return ExitIoError;
+        }
+    }
+
+    private static async Task<int> ExecuteAsync(CliOptions opts, TextWriter stdout, TextWriter stderr, CancellationToken ct)
+    {
         var catalog = opts.RulesFile is null
             ? RuleCatalog.LoadBuiltIn()
             : await RuleCatalog.FromFileAsync(opts.RulesFile, ct);
@@ -90,6 +129,11 @@ public static class Program
         {
             await stderr.WriteLineAsync($"error: path not found: {opts.Path}");
             return ExitUsage;
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            await stderr.WriteLineAsync($"error: rule pattern timed out: {ex.Pattern}");
+            return ExitIoError;
         }
 
         var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion

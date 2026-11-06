@@ -14,8 +14,8 @@ def r(id, title, kind, sev, cat, patterns, message, suggestion, docs):
                       patterns=patterns, message=message, suggestion=suggestion, docs=docs))
 
 # --- headers ---
-r("QNX001","Linux kernel headers","Include","Error","headers",["linux/","asm/"],
-  "<linux/...> and <asm/...> expose the Linux kernel ABI; QNX Neutrino has no such headers.",
+r("QNX001","Linux kernel headers","Include","Error","headers",["linux/"],
+  "<linux/...> headers expose the Linux kernel ABI; no such headers are documented for QNX SDP 8.0.",
   "Guard with #ifdef __linux__ and provide a QNX path: device control goes through devctl() or a resource manager.",
   [f"{LR}d/devctl.html"])
 r("QNX002","epoll","Include","Error","io",["sys/epoll.h"], f"<sys/epoll.h>: {NA}",
@@ -56,7 +56,7 @@ r("QNX015","sendfile/splice","Call","Error","io",["sendfile","sendfile64","splic
   "Use a read()/write() loop (or mmap() + write()).", [idx("s"), IOS])
 r("QNX016","sendfile","Include","Error","io",["sys/sendfile.h"], f"<sys/sendfile.h>: {NA}",
   "Use a read()/write() loop.", [idx("s")])
-r("QNX017","clone()","Call","Error","process",["clone3","unshare","setns"], f"clone/namespaces: {NA}",
+r("QNX017","clone3/namespaces","Call","Error","process",["clone3","unshare","setns"], f"clone3/unshare/setns: {NA}",
   "Use pthread_create(), fork() or posix_spawn(). Linux namespaces have no equivalent.",
   [f"{LR}p/posix_spawn.html", f"{LR}f/fork.html"])
 r("QNX053","clone() flags","Identifier","Error","process",["CLONE_VM","CLONE_FS","CLONE_FILES","CLONE_SIGHAND","CLONE_THREAD","CLONE_NEWNS","CLONE_NEWPID","CLONE_NEWNET","CLONE_NEWUSER","CLONE_VFORK"],
@@ -88,7 +88,7 @@ r("QNX026","mremap()","Call","Error","memory",["mremap"], f"mremap(): {NA}",
 r("QNX027","memfd_create()","Call","Error","memory",["memfd_create"], f"memfd_create(): {NA}",
   "shm_open(SHM_ANON, ...) + ftruncate(); share across processes with shm_create_handle()/shm_open_handle().",
   [f"{LR}s/shm_open.html", f"{LR}s/shm_create_handle.html"])
-r("QNX028","MAP_POPULATE","Identifier","Warning","memory",["MAP_POPULATE"], "MAP_POPULATE is not a documented mmap() flag on QNX 8.0.",
+r("QNX028","MAP_POPULATE","Identifier","Error","memory",["MAP_POPULATE"], "MAP_POPULATE is not a documented mmap() flag on QNX 8.0.",
   "Drop it: QNX 8.0 allocates mapped memory eagerly (MAP_LAZY has no effect).", [f"{LR}m/mmap.html"])
 r("QNX029","MAP_ANONYMOUS","Identifier","Note","memory",["MAP_ANONYMOUS"], "Only MAP_ANON is documented for QNX 8.0 mmap(); a MAP_ANONYMOUS alias is not confirmed.",
   "Prefer MAP_ANON (with fd = NOFD / -1) for portability.", [f"{LR}m/mmap.html"])
@@ -129,12 +129,19 @@ r("QNX045","GNU strerror_r","Identifier","Note","libc",["_GNU_SOURCE"],
   "Review GNU-only calls in this file (strerror_r return value, qsort_r, program_invocation_name, ...).", [f"{LR}s/strerror_r.html"])
 r("QNX046","sysfs","Literal","Error","procfs",[r"^/sys/"], "QNX has no /sys filesystem.",
   "Query the information through the system page, devctl() or io-sock sysctl() (network).", [f"{PG}process_proc_filesystem.html"])
-r("QNX047","Linux /proc files","Literal","Error","procfs",[r"^/proc/(cpuinfo|meminfo|stat|uptime|loadavg|version|mounts|net/|sys/|filesystems|interrupts|modules|partitions|diskstats)"],
-  "QNX /proc only has per-process directories (as, cmdline, ctl, exefile, mappings, pmap, vmstat); Linux system files like /proc/cpuinfo do not exist.",
+r("QNX054","Other Linux /proc files","Literal","Warning","procfs",[r"^/proc/(stat|uptime|loadavg|version|mounts|net/|sys/|filesystems|interrupts|modules|partitions|diskstats)"],
+  "QNX documents only per-process /proc entries (as, cmdline, ctl, exefile, mappings, pmap, vmstat); this Linux system file is not documented (not individually verified).",
+  "Expect it to be missing; get the data from the system page, devctl() or io-sock sysctl() (network).",
+  [f"{PG}process_proc_filesystem.html"])
+r("QNX055","Linux arch headers","Include","Warning","headers",["asm/"],
+  "<asm/...> are Linux kernel arch headers; QNX SDP 8.0 is not expected to ship them (not individually verified).",
+  "Guard with #ifdef __linux__; use compiler builtins or <sys/neutrino.h> facilities instead.", [])
+r("QNX047","Linux /proc files","Literal","Error","procfs",[r"^/proc/(cpuinfo|meminfo)"],
+  "QNX /proc only has per-process directories (as, cmdline, ctl, exefile, mappings, pmap, vmstat); /proc/cpuinfo and /proc/meminfo do not exist.",
   "CPU/memory info: system page (_syspage_ptr, SYSPAGE_CPU_ENTRY), SchedGetCpuNum(), devctl DCMD_PROC_SYSINFO.",
   [f"{PG}process_proc_filesystem.html", f"{LR}s/syspage_cpu_entry.html"])
 r("QNX048","/proc/self/exe","Literal","Error","procfs",[r"^/proc/(self|%d|\d+)/exe$"],
-  "QNX has /proc/<pid>/exefile instead of the exe symlink; exefile holds the path as content, so readlink() does not work on it.",
+  "QNX has /proc/<pid>/exefile instead of the Linux exe symlink; per a QNX forum answer it is a regular file holding the path, so readlink() is expected to fail.",
   "Read /proc/<pid>/exefile as a file, or use _cmdname().", [f"{PG}process_proc_filesystem.html", f"{LR}c/_cmdname.html"])
 r("QNX049","/proc/<pid> Linux files","Literal","Error","procfs",[r"^/proc/(self|%d|\d+)/(maps|smaps|status|stat|statm|fd/?|task/?|environ|limits|mountinfo|cgroup|oom_score_adj|comm)"],
   "Per-process Linux procfs files are not available; QNX offers as, cmdline, ctl, exefile, mappings, pmap and vmstat.",

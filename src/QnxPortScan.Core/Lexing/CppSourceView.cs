@@ -89,14 +89,15 @@ public sealed class CppSourceView
                 continue;
             }
 
-            if (c == '"' && IsRawStringPrefix(text, i0, out var delimiter))
+            if (c == '"' && IsRawStringPrefix(text, i0, out var delimiter)
+                && text.IndexOf(")" + delimiter + "\"", i0 + 1 + delimiter.Length + 1, StringComparison.Ordinal) is var rawClose and >= 0)
             {
-                // R"delim( ... )delim"
+                // R"delim( ... )delim". Unterminated or misdetected raw strings fall back to normal lexing
+                // instead of swallowing the rest of the file.
                 var contentStart = i0 + 1 + delimiter.Length + 1;
                 var terminator = ")" + delimiter + "\"";
-                var close = text.IndexOf(terminator, contentStart, StringComparison.Ordinal);
-                var contentEnd = close < 0 ? n : close;
-                var end = close < 0 ? n : close + terminator.Length;
+                var contentEnd = rawClose;
+                var end = rawClose + terminator.Length;
                 CopyLiteral(text, code, lits, contentStart, contentEnd);
                 spans.Add((contentStart, contentEnd));
                 i0 = end;

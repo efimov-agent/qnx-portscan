@@ -10,8 +10,21 @@ public sealed class RuleMatcher
     private static readonly Regex IncludeRegex =
         new(@"^[ \t]*#[ \t]*include[ \t]*[<""](?<h>[^>""]+)[>""]", RegexOptions.Multiline | RegexOptions.Compiled);
 
+    // Includes backslash-continued physical lines of the directive.
     private static readonly Regex ConditionRegex =
-        new(@"^[ \t]*#[ \t]*(if|ifdef|ifndef|elif|elifdef|elifndef|undef)\b[^\n]*", RegexOptions.Multiline | RegexOptions.Compiled);
+        new(@"^[ \t]*#[ \t]*(if|ifdef|ifndef|elif|elifdef|elifndef|undef)\b(?:[^\n]*\\\r?\n)*[^\n]*", RegexOptions.Multiline | RegexOptions.Compiled);
+
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(2);
+
+    private static readonly HashSet<string> CallKeywords = new(StringComparer.Ordinal)
+    {
+        "return", "case", "else", "do", "sizeof", "throw", "new", "delete", "co_return", "co_await", "co_yield", "goto",
+    };
+
+    private static readonly HashSet<string> DeclaratorSuffixKeywords = new(StringComparer.Ordinal)
+    {
+        "const", "noexcept", "override", "final", "volatile", "throw",
+    };
 
     private readonly List<(Rule Rule, Regex Regex)> _codeRules = [];
     private readonly List<(Rule Rule, Regex Regex)> _literalRules = [];
@@ -27,13 +40,13 @@ public sealed class RuleMatcher
                     _includeRules.Add((rule, rule.Patterns.ToArray()));
                     break;
                 case RuleKind.Call:
-                    _codeRules.Add((rule, new Regex($@"(?<![\w.>]|->)\b(?<m>{Alternation(rule)})\s*\(", RegexOptions.Compiled)));
+                    _codeRules.Add((rule, new Regex($@"(?<![\w.>]|\w::)\b(?<m>{Alternation(rule)})\s*\(", RegexOptions.Compiled, MatchTimeout)));
                     break;
                 case RuleKind.Identifier:
-                    _codeRules.Add((rule, new Regex($@"\b(?<m>{Alternation(rule)})\b", RegexOptions.Compiled)));
+                    _codeRules.Add((rule, new Regex($@"\b(?<m>{Alternation(rule)})\b", RegexOptions.Compiled, MatchTimeout)));
                     break;
                 case RuleKind.Literal:
-                    _literalRules.Add((rule, new Regex($"(?<m>{string.Join('|', rule.Patterns)})", RegexOptions.Compiled)));
+                    _literalRules.Add((rule, new Regex($"(?<m>{string.Join('|', rule.Patterns)})", RegexOptions.Compiled, MatchTimeout)));
                     break;
             }
         }
@@ -41,7 +54,7 @@ public sealed class RuleMatcher
 
     private static string Alternation(Rule rule) => string.Join('|', rule.Patterns.Select(Regex.Escape));
 
-    public IEnumerable<(Rule Rule, int Offset, string Match)> Match(CppSourceView view)
+    public IEnumerable<MatchHit> Match(CppSourceView view)
     {
         foreach (Match m in IncludeRegex.Matches(view.Code))
         {
@@ -54,7 +67,7 @@ public sealed class RuleMatcher
             {
                 if (patterns.Any(p => p.EndsWith('/') ? header.StartsWith(p, StringComparison.Ordinal) : header == p))
                 {
-                    yield return (rule, origMatch.Groups["h"].Index, header);
+                    yield return new MatchHit(rule, origMatch.Groups["h"].Index, header, HitKind.Use);
                 }
             }
         }
@@ -70,7 +83,8 @@ public sealed class RuleMatcher
             foreach (Match m in regex.Matches(target))
             {
                 var g = m.Groups["m"];
-                yield return (rule, g.Index, g.Value);
+                var kind = rule.Kind == RuleKind.Call ? ClassifyCall(target, g.Index, m.Index + m.Length - 1) : HitKind.Use;
+                yield return new MatchHit(rule, g.Index, g.Value, kind);
             }
         }
 
@@ -82,9 +96,67 @@ public sealed class RuleMatcher
                 foreach (Match m in regex.Matches(literal))
                 {
                     var g = m.Groups["m"];
-                    yield return (rule, start + g.Index, g.Value);
+                    yield return new MatchHit(rule, start + g.Index, g.Value, HitKind.Use);
                 }
             }
         }
     }
+
+    /// <summary>
+    /// Tells a call from a declaration/definition of a function with the same name
+    /// ("int splice(int);", "static char *itoa(int v) {").
+    /// </summary>
+    internal static HitKind ClassifyCall(string code, int nameStart, int openParen)
+    {
+        var p = nameStart - 1;
+        while (p >= 0 && code[p] is ' ' or '\t') p--;
+        if (p < 0) return HitKind.Use;
+        var prev = code[p];
+        var looksDeclared = false;
+        if (char.IsLetterOrDigit(prev) || prev == '_')
+        {
+            var end = p + 1;
+            while (p >= 0 && (char.IsLetterOrDigit(code[p]) || code[p] == '_')) p--;
+            looksDeclared = !CallKeywords.Contains(code[(p + 1)..end]);
+        }
+        else if (prev is '*' or '&')
+        {
+            // "char *itoa(" at statement start: only identifiers, '*', '&' and spaces since the line start.
+            var lineStart = code.LastIndexOf('\n', p) + 1;
+            var head = code[lineStart..(p + 1)];
+            looksDeclared = head.Trim().Length > 1 && head.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or ' ' or '\t' or '*' or '&' or ':' or '<' or '>' or ',');
+        }
+        if (!looksDeclared) return HitKind.Use;
+
+        // Find the matching ')' and look at what follows: '{' means a definition.
+        var depth = 0;
+        var i = openParen;
+        for (; i < code.Length && i < openParen + 8000; i++)
+        {
+            if (code[i] == '(') depth++;
+            else if (code[i] == ')' && --depth == 0) break;
+        }
+        if (depth != 0) return HitKind.Declaration;
+        i++;
+        while (true)
+        {
+            while (i < code.Length && char.IsWhiteSpace(code[i])) i++;
+            var wordStart = i;
+            while (i < code.Length && (char.IsLetterOrDigit(code[i]) || code[i] == '_')) i++;
+            if (i == wordStart) break;
+            if (!DeclaratorSuffixKeywords.Contains(code[wordStart..i])) break;
+        }
+        return i < code.Length && code[i] == '{' ? HitKind.Definition : HitKind.Declaration;
+    }
 }
+
+public enum HitKind
+{
+    Use,
+    /// <summary>Prototype of a function that shares the rule's name.</summary>
+    Declaration,
+    /// <summary>The project defines its own function with this name.</summary>
+    Definition,
+}
+
+public readonly record struct MatchHit(Rule Rule, int Offset, string Match, HitKind Kind);

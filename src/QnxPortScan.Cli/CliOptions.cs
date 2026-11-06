@@ -38,6 +38,7 @@ public sealed class CliOptions
                 case "-v" or "--verbose": o.Verbose = true; break;
                 default:
                     if (a.StartsWith('-')) throw new ArgumentException($"unknown option '{a}'");
+                    if (cmd == "rules") throw new ArgumentException($"unexpected argument '{a}'");
                     if (o.Path is not null) throw new ArgumentException("only one path is allowed");
                     o.Path = a;
                     break;

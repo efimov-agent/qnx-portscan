@@ -2,7 +2,7 @@
 # Acceptance check for qnx-portscan: build, unit tests, CLI smoke on a fixture.
 set -euo pipefail
 cd "$(dirname "$0")"
-dotnet build -c Release -v q -nologo | grep -E " error |Build succeeded" || true
+dotnet build -c Release -v q -nologo
 dotnet test -c Release -v q -nologo
 BIN=src/QnxPortScan.Cli/bin/Release/net10.0/qnx-portscan
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT

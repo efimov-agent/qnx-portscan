@@ -16,7 +16,6 @@ public static partial class PreprocessorTracker
     private sealed class Frame
     {
         public Polarity Current;
-        public bool LinuxSeen; // some earlier branch of this chain was Linux-positive
     }
 
     [GeneratedRegex(@"^\s*#\s*(?<dir>ifdef|ifndef|if|elif|elifdef|elifndef|else|endif)\b(?<rest>.*)$")]
@@ -37,6 +36,12 @@ public static partial class PreprocessorTracker
             {
                 var dir = m.Groups["dir"].Value;
                 var rest = m.Groups["rest"].Value;
+                // Join backslash-continued physical lines into one logical directive.
+                var last = line;
+                while (rest.TrimEnd().EndsWith('\\') && last < view.LineCount)
+                {
+                    rest = rest.TrimEnd()[..^1] + " " + GetCodeLine(view, ++last);
+                }
                 switch (dir)
                 {
                     case "ifdef":
@@ -51,7 +56,6 @@ public static partial class PreprocessorTracker
                     case "elif" or "elifdef" or "elifndef":
                         if (stack.TryPeek(out var f1))
                         {
-                            f1.LinuxSeen |= f1.Current == Polarity.Linux;
                             f1.Current = dir switch
                             {
                                 "elifdef" => ClassifyDefined(rest, false),
@@ -75,7 +79,8 @@ public static partial class PreprocessorTracker
                         if (stack.Count > 0) stack.Pop();
                         break;
                 }
-                result[line] = Current(stack);
+                for (var l = line; l <= last; l++) result[l] = Current(stack);
+                line = last;
                 continue;
             }
             result[line] = Current(stack);
@@ -102,19 +107,35 @@ public static partial class PreprocessorTracker
         "__sun", "__sun__", "sun", "_AIX", "__MVS__", "__HAIKU__", "__GNU__", "__EMSCRIPTEN__",
     };
 
-    private static readonly HashSet<string> ForeignFeatureTokens = new(StringComparer.Ordinal)
+    // Facility names: any macro mentioning them (HAVE_EPOLL, UV__KQUEUE_EVFILT_USER) is about a non-QNX facility.
+    private static readonly HashSet<string> ForeignFacilityTokens = new(StringComparer.Ordinal)
     {
-        "EPOLL", "KQUEUE", "LINUX", "DARWIN", "APPLE", "MACOS", "OSX", "FREEBSD", "NETBSD", "OPENBSD",
-        "WIN32", "WIN64", "WINDOWS", "EVENTFD", "SIGNALFD", "TIMERFD", "SENDFILE", "IOURING", "URING", "GLIBC", "PRCTL",
+        "EPOLL", "KQUEUE", "EVENTFD", "SIGNALFD", "TIMERFD", "SENDFILE", "IOURING", "URING", "PRCTL",
+    };
+
+    // Platform names count only as the last segment after a feature prefix (ZMQ_HAVE_LINUX, USE_WINDOWS),
+    // so CONFIG_HAS_WINDOWS_COUNT is not treated as a platform guard.
+    private static readonly HashSet<string> ForeignPlatformTokens = new(StringComparer.Ordinal)
+    {
+        "LINUX", "DARWIN", "APPLE", "MACOS", "OSX", "FREEBSD", "NETBSD", "OPENBSD", "WIN32", "WIN64", "WINDOWS", "GLIBC",
+    };
+
+    private static readonly HashSet<string> FeaturePrefixes = new(StringComparer.Ordinal)
+    {
+        "HAVE", "USE", "ENABLE", "WITH", "HAS", "IS", "ON", "OS", "PLATFORM", "TARGET", "BUILD",
     };
 
     /// <summary>
     /// True for platform macros (__linux__, _WIN32, ...) and for feature macros named after a
     /// non-QNX facility (HAVE_EPOLL, UV__KQUEUE_EVFILT_USER, USE_LINUX_AIO): a QNX build will not define them.
     /// </summary>
-    private static bool IsForeign(string macro) =>
-        ForeignPlatformMacros.Contains(macro) ||
-        macro.ToUpperInvariant().Split('_', StringSplitOptions.RemoveEmptyEntries).Any(ForeignFeatureTokens.Contains);
+    private static bool IsForeign(string macro)
+    {
+        if (ForeignPlatformMacros.Contains(macro)) return true;
+        var parts = macro.ToUpperInvariant().Split('_', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Any(ForeignFacilityTokens.Contains)) return true;
+        return parts.Length >= 2 && ForeignPlatformTokens.Contains(parts[^1]) && FeaturePrefixes.Contains(parts[^2]);
+    }
 
     [GeneratedRegex(@"^\(*\s*(?<neg>!\s*)?(defined\s*\(?\s*)?(?<m>[A-Za-z_]\w*)\s*\)?\s*\)*$")]
     private static partial Regex TermRegex();
@@ -133,8 +154,8 @@ public static partial class PreprocessorTracker
     /// </summary>
     private static Polarity ClassifyExpression(string expr)
     {
-        var e = expr.Trim();
-        if (e == "0") return Polarity.Zero;
+        var e = Unwrap(expr);
+        if (e == "0" || e.Split("&&").Any(c => Unwrap(c) == "0")) return Polarity.Zero;
         if (QnxMacroRegex().IsMatch(e)) return Polarity.None;
         var conjuncts = e.Split("&&");
         foreach (var c in conjuncts)

@@ -10,7 +10,7 @@ dotnet run --project src/QnxPortScan.Cli -- rules
 ```
 
 ## What it checks
-53 rules (`tools/gen_rules.py` → `Rules/rules.json`) checked against the QNX SDP 8.0 C Library Reference:
+55 rules (`tools/gen_rules.py` → `Rules/rules.json`) checked against the QNX SDP 8.0 C Library Reference:
 epoll, kqueue, eventfd, signalfd, timerfd, inotify (libfsnotify caveats), prctl, sendfile/splice, clone/namespaces,
 raw `syscall()`, sysinfo, CPU affinity (`cpu_set_t`), `sched_getcpu`, mremap, memfd_create, getrandom, getauxval,
 glibc backtrace, ptrace, io_uring, `<mntent.h>`, statfs, dup3, O_PATH, MAP_POPULATE, Linux `/proc` and `/sys` paths,
@@ -18,7 +18,7 @@ GNU libc extensions, `itoa` (removed in 8.0), `<linux/*.h>` headers. Each rule h
 (ionotify + pulses, `timer_create(SIGEV_PULSE)`, `ThreadCtl(_NTO_TCTL_RUNMASK)`, `shm_open(SHM_ANON)`, `/proc/<pid>/exefile`, …)
 and links to the official docs.
 
-Severity: **error** — not documented in QNX 8.0; **warning** — exists with caveats; **note** — not confirmed either way.
+Severity: **error** — not documented in QNX 8.0; **warning** — exists with caveats, or absence not individually verified; **note** — not confirmed either way.
 
 ## Keeping noise down
 - Comments and string literals are lexed out (raw strings, digit separators handled); path rules look only inside literals.
@@ -31,7 +31,7 @@ Severity: **error** — not documented in QNX 8.0; **warning** — exists with c
 ## Output
 - Markdown: summary per rule, "how to port" section, findings per file.
 - SARIF 2.1.0 for GitHub code scanning / VS Code SARIF viewer.
-- Exit code: 0 ok, 1 findings at `--fail-on` level, 2 usage error.
+- Exit code: 0 ok, 1 findings at `--fail-on` level, 2 usage error, 3 I/O or rules-file error.
 
 ## Limits
 Text-level analysis, not a compiler: project-specific config macros (e.g. `HAVE_BACKTRACE`) are not evaluated,

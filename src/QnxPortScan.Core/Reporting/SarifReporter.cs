@@ -53,7 +53,7 @@ public static class SarifReporter
                 {
                     ["physicalLocation"] = new JsonObject
                     {
-                        ["artifactLocation"] = new JsonObject { ["uri"] = f.File, ["uriBaseId"] = "SRCROOT" },
+                        ["artifactLocation"] = new JsonObject { ["uri"] = EscapeRelativeUri(f.File), ["uriBaseId"] = "SRCROOT" },
                         ["region"] = new JsonObject
                         {
                             ["startLine"] = f.Line,
@@ -109,6 +109,9 @@ public static class SarifReporter
         var data = System.Text.Encoding.UTF8.GetBytes($"{f.Rule.Id}|{f.File}|{f.Snippet}");
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data))[..16].ToLowerInvariant();
     }
+
+    private static string EscapeRelativeUri(string path) =>
+        string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
     private static string EnsureTrailingSlash(string p) => p.EndsWith('/') ? p : p + "/";
 

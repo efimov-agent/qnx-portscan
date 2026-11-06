@@ -7,10 +7,9 @@
     "severity": "Error",
     "category": "headers",
     "patterns": [
-      "linux/",
-      "asm/"
+      "linux/"
     ],
-    "message": "<linux/...> and <asm/...> expose the Linux kernel ABI; QNX Neutrino has no such headers.",
+    "message": "<linux/...> headers expose the Linux kernel ABI; no such headers are documented for QNX SDP 8.0.",
     "suggestion": "Guard with #ifdef __linux__ and provide a QNX path: device control goes through devctl() or a resource manager.",
     "docs": [
       "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.lib_ref/topic/d/devctl.html"
@@ -276,7 +275,7 @@
   },
   {
     "id": "QNX017",
-    "title": "clone()",
+    "title": "clone3/namespaces",
     "kind": "Call",
     "severity": "Error",
     "category": "process",
@@ -285,7 +284,7 @@
       "unshare",
       "setns"
     ],
-    "message": "clone/namespaces: Not documented in the QNX SDP 8.0 C Library Reference.",
+    "message": "clone3/unshare/setns: Not documented in the QNX SDP 8.0 C Library Reference.",
     "suggestion": "Use pthread_create(), fork() or posix_spawn(). Linux namespaces have no equivalent.",
     "docs": [
       "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.lib_ref/topic/p/posix_spawn.html",
@@ -484,7 +483,7 @@
     "id": "QNX028",
     "title": "MAP_POPULATE",
     "kind": "Identifier",
-    "severity": "Warning",
+    "severity": "Error",
     "category": "memory",
     "patterns": [
       "MAP_POPULATE"
@@ -791,15 +790,43 @@
     ]
   },
   {
+    "id": "QNX054",
+    "title": "Other Linux /proc files",
+    "kind": "Literal",
+    "severity": "Warning",
+    "category": "procfs",
+    "patterns": [
+      "^/proc/(stat|uptime|loadavg|version|mounts|net/|sys/|filesystems|interrupts|modules|partitions|diskstats)"
+    ],
+    "message": "QNX documents only per-process /proc entries (as, cmdline, ctl, exefile, mappings, pmap, vmstat); this Linux system file is not documented (not individually verified).",
+    "suggestion": "Expect it to be missing; get the data from the system page, devctl() or io-sock sysctl() (network).",
+    "docs": [
+      "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/process_proc_filesystem.html"
+    ]
+  },
+  {
+    "id": "QNX055",
+    "title": "Linux arch headers",
+    "kind": "Include",
+    "severity": "Warning",
+    "category": "headers",
+    "patterns": [
+      "asm/"
+    ],
+    "message": "<asm/...> are Linux kernel arch headers; QNX SDP 8.0 is not expected to ship them (not individually verified).",
+    "suggestion": "Guard with #ifdef __linux__; use compiler builtins or <sys/neutrino.h> facilities instead.",
+    "docs": []
+  },
+  {
     "id": "QNX047",
     "title": "Linux /proc files",
     "kind": "Literal",
     "severity": "Error",
     "category": "procfs",
     "patterns": [
-      "^/proc/(cpuinfo|meminfo|stat|uptime|loadavg|version|mounts|net/|sys/|filesystems|interrupts|modules|partitions|diskstats)"
+      "^/proc/(cpuinfo|meminfo)"
     ],
-    "message": "QNX /proc only has per-process directories (as, cmdline, ctl, exefile, mappings, pmap, vmstat); Linux system files like /proc/cpuinfo do not exist.",
+    "message": "QNX /proc only has per-process directories (as, cmdline, ctl, exefile, mappings, pmap, vmstat); /proc/cpuinfo and /proc/meminfo do not exist.",
     "suggestion": "CPU/memory info: system page (_syspage_ptr, SYSPAGE_CPU_ENTRY), SchedGetCpuNum(), devctl DCMD_PROC_SYSINFO.",
     "docs": [
       "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/process_proc_filesystem.html",
@@ -815,7 +842,7 @@
     "patterns": [
       "^/proc/(self|%d|\\d+)/exe$"
     ],
-    "message": "QNX has /proc/<pid>/exefile instead of the exe symlink; exefile holds the path as content, so readlink() does not work on it.",
+    "message": "QNX has /proc/<pid>/exefile instead of the Linux exe symlink; per a QNX forum answer it is a regular file holding the path, so readlink() is expected to fail.",
     "suggestion": "Read /proc/<pid>/exefile as a file, or use _cmdname().",
     "docs": [
       "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/process_proc_filesystem.html",
