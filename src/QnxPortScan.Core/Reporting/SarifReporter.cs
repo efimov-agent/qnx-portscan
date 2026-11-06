@@ -47,7 +47,7 @@ public static class SarifReporter
                 ["level"] = Level(f.Severity),
                 ["message"] = new JsonObject
                 {
-                    ["text"] = $"'{f.Match}': {f.Rule.Title}. {f.Rule.Suggestion}" + (f.LinuxGuarded ? " (inside a Linux-only #ifdef branch)" : string.Empty),
+                    ["text"] = $"'{f.Match}': {f.Rule.Title}. {f.Rule.Suggestion}" + (f.Guarded ? $" ({f.GuardReason})" : string.Empty),
                 },
                 ["locations"] = new JsonArray(new JsonObject
                 {

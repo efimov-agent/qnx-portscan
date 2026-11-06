@@ -62,7 +62,7 @@ public static class MarkdownReporter
             sb.AppendLine();
             foreach (var f in file)
             {
-                var guard = f.LinuxGuarded ? " _(inside Linux-only #ifdef)_" : string.Empty;
+                var guard = f.Guarded ? $" _({f.GuardReason})_" : string.Empty;
                 sb.AppendLine($"- L{f.Line}:{f.Column} **{f.Rule.Id}** `{f.Match}`{guard} — `{Truncate(f.Snippet, 120).Replace("`", "'")}`");
             }
         }

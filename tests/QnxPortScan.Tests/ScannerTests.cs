@@ -57,6 +57,10 @@ public class ScannerTests
     [InlineData("#ifndef __linux__\nx();\n#else\nepoll_wait(1);\n#endif")]
     [InlineData("#if 0\nepoll_wait(1);\n#endif")]
     [InlineData("#ifdef __linux__\n#ifdef HAVE_X\nepoll_wait(1);\n#endif\n#endif")]
+    [InlineData("#if defined(__APPLE__) || defined(__FreeBSD__)\nepoll_wait(1);\n#endif")]
+    [InlineData("#if (defined(__linux__) || defined(__ANDROID__)) && HAVE_EPOLL\nepoll_wait(1);\n#endif")]
+    [InlineData("#if !defined(_WIN32)\nx();\n#else\nepoll_wait(1);\n#endif")]
+    [InlineData("#ifdef _WIN32\nepoll_wait(1);\n#elif defined(__QNX__)\nx();\n#endif")]
     public void Guarded_or_disabled_code_is_skipped_by_default(string src)
     {
         Assert.Empty(_scanner.ScanText("a.c", src));
@@ -68,6 +72,9 @@ public class ScannerTests
     [InlineData("#if defined(__linux__) || defined(__QNX__)\nepoll_wait(1);\n#endif")]
     [InlineData("#ifdef __linux__\nx();\n#endif\nepoll_wait(1);")]
     [InlineData("#if 0\nx();\n#else\nepoll_wait(1);\n#endif")]
+    [InlineData("#if defined(__linux__) || defined(__unix__)\nepoll_wait(1);\n#endif")]
+    [InlineData("#if defined(__linux__) || HAVE_EPOLL\nepoll_wait(1);\n#endif")]
+    [InlineData("#ifdef __APPLE__\nx();\n#elif defined(HAVE_EPOLL)\nepoll_wait(1);\n#endif")]
     public void Unguarded_code_is_reported(string src)
     {
         Assert.Single(_scanner.ScanText("a.c", src));
@@ -77,7 +84,7 @@ public class ScannerTests
     public void Guarded_code_reported_as_note_when_requested()
     {
         var f = Assert.Single(_scanner.ScanText("a.c", "#ifdef __linux__\nepoll_wait(1);\n#endif", new ScanOptions { IncludeGuarded = true }));
-        Assert.True(f.LinuxGuarded);
+        Assert.True(f.Guarded);
         Assert.Equal(Severity.Note, f.Severity);
     }
 
@@ -107,5 +114,31 @@ public class ScannerTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+}
+
+public class PlatformFileDetectorTests
+{
+    [Theory]
+    [InlineData("src/unix/linux.c", "linux")]
+    [InlineData("src/ae_epoll.c", "epoll")]
+    [InlineData("src/kqueue.cpp", "kqueue")]
+    [InlineData("os/darwin/proc.c", "darwin")]
+    [InlineData("src/win/core.c", "win")]
+    [InlineData("src/qnx/linux_compat.c", null)]
+    [InlineData("src/window.c", null)]
+    [InlineData("src/poller.cpp", null)]
+    public void Detects_platform_files(string path, string? expected)
+    {
+        Assert.Equal(expected, QnxPortScan.Core.Scanning.PlatformFileDetector.Detect(path));
+    }
+
+    [Fact]
+    public void Findings_in_platform_files_are_hidden_by_default()
+    {
+        var s = new Scanner(TestRules.Catalog);
+        Assert.Empty(s.ScanText("src/ae_epoll.c", "epoll_wait(1);"));
+        var f = Assert.Single(s.ScanText("src/ae_epoll.c", "epoll_wait(1);", new ScanOptions { IncludeGuarded = true }));
+        Assert.Equal("platform-specific file (epoll)", f.GuardReason);
     }
 }

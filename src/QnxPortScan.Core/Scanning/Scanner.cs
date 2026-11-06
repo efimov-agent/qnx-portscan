@@ -27,19 +27,22 @@ public sealed partial class Scanner
         options ??= new ScanOptions();
         var view = CppSourceView.Parse(text);
         var contexts = PreprocessorTracker.Analyze(view);
+        var platformFile = PlatformFileDetector.Detect(relativePath);
         var findings = new List<Finding>();
         foreach (var (rule, offset, match) in _matcher.Match(view))
         {
             var (line, col) = view.GetPosition(offset);
             var ctx = contexts[line];
             if (ctx == PreprocessorTracker.LineContext.Disabled) continue;
-            var guarded = ctx == PreprocessorTracker.LineContext.LinuxGuarded;
-            if (guarded && !options.IncludeGuarded) continue;
+            var reason = ctx == PreprocessorTracker.LineContext.LinuxGuarded
+                ? "inside a non-QNX platform #if branch"
+                : platformFile is not null ? $"platform-specific file ({platformFile})" : null;
+            if (reason is not null && !options.IncludeGuarded) continue;
             findings.Add(new Finding(
                 rule, relativePath, line, col, match,
                 view.GetLineText(line).Trim(),
-                guarded ? Severity.Note : rule.Severity,
-                guarded));
+                reason is not null ? Severity.Note : rule.Severity,
+                reason));
         }
         return findings
             .DistinctBy(f => (f.Rule.Id, f.Line, f.Column))
