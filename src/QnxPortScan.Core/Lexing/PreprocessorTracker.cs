@@ -102,13 +102,27 @@ public static partial class PreprocessorTracker
         "__sun", "__sun__", "sun", "_AIX", "__MVS__", "__HAIKU__", "__GNU__", "__EMSCRIPTEN__",
     };
 
+    private static readonly HashSet<string> ForeignFeatureTokens = new(StringComparer.Ordinal)
+    {
+        "EPOLL", "KQUEUE", "LINUX", "DARWIN", "APPLE", "MACOS", "OSX", "FREEBSD", "NETBSD", "OPENBSD",
+        "WIN32", "WIN64", "WINDOWS", "EVENTFD", "SIGNALFD", "TIMERFD", "SENDFILE", "IOURING", "URING", "GLIBC", "PRCTL",
+    };
+
+    /// <summary>
+    /// True for platform macros (__linux__, _WIN32, ...) and for feature macros named after a
+    /// non-QNX facility (HAVE_EPOLL, UV__KQUEUE_EVFILT_USER, USE_LINUX_AIO): a QNX build will not define them.
+    /// </summary>
+    private static bool IsForeign(string macro) =>
+        ForeignPlatformMacros.Contains(macro) ||
+        macro.ToUpperInvariant().Split('_', StringSplitOptions.RemoveEmptyEntries).Any(ForeignFeatureTokens.Contains);
+
     [GeneratedRegex(@"^\(*\s*(?<neg>!\s*)?(defined\s*\(?\s*)?(?<m>[A-Za-z_]\w*)\s*\)?\s*\)*$")]
     private static partial Regex TermRegex();
 
     private static Polarity ClassifyDefined(string rest, bool negate)
     {
         var name = rest.Trim().Split(' ', '\t').FirstOrDefault() ?? string.Empty;
-        if (ForeignPlatformMacros.Contains(name)) return negate ? Polarity.NotLinux : Polarity.Linux;
+        if (IsForeign(name)) return negate ? Polarity.NotLinux : Polarity.Linux;
         return Polarity.None;
     }
 
@@ -127,13 +141,13 @@ public static partial class PreprocessorTracker
         {
             var terms = Unwrap(c).Split("||");
             var all = terms.Select(t => TermRegex().Match(t.Trim())).ToList();
-            if (all.All(m => m.Success && m.Groups["neg"].Length == 0 && ForeignPlatformMacros.Contains(m.Groups["m"].Value)))
+            if (all.All(m => m.Success && m.Groups["neg"].Length == 0 && IsForeign(m.Groups["m"].Value)))
                 return Polarity.Linux;
         }
         if (conjuncts.Length == 1)
         {
             var m = TermRegex().Match(e);
-            if (m.Success && m.Groups["neg"].Length > 0 && ForeignPlatformMacros.Contains(m.Groups["m"].Value))
+            if (m.Success && m.Groups["neg"].Length > 0 && IsForeign(m.Groups["m"].Value))
                 return Polarity.NotLinux;
         }
         return Polarity.None;

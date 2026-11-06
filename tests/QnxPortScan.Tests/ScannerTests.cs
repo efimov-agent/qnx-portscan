@@ -60,6 +60,9 @@ public class ScannerTests
     [InlineData("#if defined(__APPLE__) || defined(__FreeBSD__)\nepoll_wait(1);\n#endif")]
     [InlineData("#if (defined(__linux__) || defined(__ANDROID__)) && HAVE_EPOLL\nepoll_wait(1);\n#endif")]
     [InlineData("#if !defined(_WIN32)\nx();\n#else\nepoll_wait(1);\n#endif")]
+    [InlineData("#if UV__KQUEUE_EVFILT_USER\nepoll_wait(1);\n#endif")]
+    [InlineData("#ifndef HAVE_EPOLL\nx();\n#else\nepoll_wait(1);\n#endif")]
+    [InlineData("#if defined(MAP_POPULATE)\n#endif")]
     [InlineData("#ifdef _WIN32\nepoll_wait(1);\n#elif defined(__QNX__)\nx();\n#endif")]
     public void Guarded_or_disabled_code_is_skipped_by_default(string src)
     {
@@ -73,8 +76,9 @@ public class ScannerTests
     [InlineData("#ifdef __linux__\nx();\n#endif\nepoll_wait(1);")]
     [InlineData("#if 0\nx();\n#else\nepoll_wait(1);\n#endif")]
     [InlineData("#if defined(__linux__) || defined(__unix__)\nepoll_wait(1);\n#endif")]
-    [InlineData("#if defined(__linux__) || HAVE_EPOLL\nepoll_wait(1);\n#endif")]
-    [InlineData("#ifdef __APPLE__\nx();\n#elif defined(HAVE_EPOLL)\nepoll_wait(1);\n#endif")]
+    [InlineData("#if defined(__linux__) || HAVE_POLL\nepoll_wait(1);\n#endif")]
+    [InlineData("#if defined(MAP_POPULATE)\nint f = MAP_POPULATE;\n#endif")]
+    [InlineData("#ifdef __APPLE__\nx();\n#elif defined(HAVE_POLL)\nepoll_wait(1);\n#endif")]
     public void Unguarded_code_is_reported(string src)
     {
         Assert.Single(_scanner.ScanText("a.c", src));

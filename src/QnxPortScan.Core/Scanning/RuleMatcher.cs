@@ -10,6 +10,9 @@ public sealed class RuleMatcher
     private static readonly Regex IncludeRegex =
         new(@"^[ \t]*#[ \t]*include[ \t]*[<""](?<h>[^>""]+)[>""]", RegexOptions.Multiline | RegexOptions.Compiled);
 
+    private static readonly Regex ConditionRegex =
+        new(@"^[ \t]*#[ \t]*(if|ifdef|ifndef|elif|elifdef|elifndef|undef)\b[^\n]*", RegexOptions.Multiline | RegexOptions.Compiled);
+
     private readonly List<(Rule Rule, Regex Regex)> _codeRules = [];
     private readonly List<(Rule Rule, Regex Regex)> _literalRules = [];
     private readonly List<(Rule Rule, string[] Patterns)> _includeRules = [];
@@ -59,9 +62,12 @@ public sealed class RuleMatcher
         // Include lines with quoted headers were blanked; angle-bracket headers survive in Code
         // and would otherwise also hit identifier rules (e.g. <sys/epoll.h>), so skip include lines.
         var codeNoIncludes = IncludeRegex.Replace(view.Code, m => new string(' ', m.Length));
+        // Feature tests like "#if defined(SOCK_CLOEXEC)" are portable by construction.
+        var codeNoConditions = ConditionRegex.Replace(codeNoIncludes, m => new string(' ', m.Length));
         foreach (var (rule, regex) in _codeRules)
         {
-            foreach (Match m in regex.Matches(codeNoIncludes))
+            var target = rule.Kind == RuleKind.Identifier ? codeNoConditions : codeNoIncludes;
+            foreach (Match m in regex.Matches(target))
             {
                 var g = m.Groups["m"];
                 yield return (rule, g.Index, g.Value);
