@@ -56,8 +56,11 @@ CTest properties `DISABLED`, `WILL_FAIL`, `SKIP_RETURN_CODE` and `ENVIRONMENT` a
 an outcome but cannot be applied (`PASS/FAIL/SKIP_REGULAR_EXPRESSION`, `ENVIRONMENT_MODIFICATION`, `TIMEOUT_AFTER_MATCH`)
 stop the run with an error.
 
-Limits: test executables are copied alone, so shared libraries built by the project, data files, host paths
-in arguments and `WORKING_DIRECTORY` are not carried over; link tests statically or use system libraries.
+`--files DIR` places the contents of `DIR` in the directory the tests run in. `--user NAME` runs them as that
+guest user (the image has `qnxuser`) and hands the directory over to it; the default is root.
+
+Limits: shared libraries built by the project, host paths in arguments and `WORKING_DIRECTORY`
+are not carried over; link tests statically or use system libraries. See `docs/libuv-on-qnx.md` for a full example.
 The timeout kills only the test process, not processes it spawned. Tests run one by one, in CTest order; `DEPENDS`, `FIXTURES_*` and `REQUIRED_FILES` are ignored, so a test
 whose setup failed still runs. An exit status above 128 counts as a crash and always fails.
 `tools/qnx-ctest/check.sh` is the end-to-end check on a sample suite (needs the SDP and KVM).

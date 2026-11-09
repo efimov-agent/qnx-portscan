@@ -2,7 +2,9 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from qnx_ctest import Test, classify, guest_script, parse_serial
+import tempfile
+
+from qnx_ctest import Test, classify, data_file_entries, executable_names, guest_script, parse_serial
 
 N = "QCTabc"
 TESTS = [Test("a", Path("/x/a"), (), 5), Test("b", Path("/x/b"), ("two words",), 5), Test("c", Path("/x/c"), (), 5)]
@@ -59,13 +61,57 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(classify(replace(self.T, will_fail=True), 137, True), "timeout")
 
 
+class ImageContentTests(unittest.TestCase):
+    def test_one_binary_with_many_arguments_is_shipped_once(self):
+        same = [Test("x", Path("/x/a"), ("x",), 5), Test("y", Path("/x/a"), ("y",), 5), Test("z", Path("/x/b"), (), 5)]
+        self.assertEqual(executable_names(same), {Path("/x/a"): "e0", Path("/x/b"): "e1"})
+        script = guest_script(same, N)
+        self.assertIn("./e0 x </dev/null", script)
+        self.assertIn("./e0 y </dev/null", script)
+
+    def test_disabled_tests_do_not_ship_an_executable(self):
+        self.assertEqual(executable_names([Test("d", Path(), (), 5, disabled=True)]), {})
+
+    def test_data_files_keep_their_relative_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = Path(tmp) / "test" / "fixtures"
+            nested.mkdir(parents=True)
+            (nested / "empty").touch()
+            entries = data_file_entries(Path(tmp))
+        self.assertEqual(entries, [f"[uid=0 gid=0 perms=0644] /data/tests/test/fixtures/empty = {nested / 'empty'}\n"])
+
+    def test_data_file_clashing_with_runner_files_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "run.sh").touch()
+            with self.assertRaises(SystemExit):
+                data_file_entries(Path(tmp))
+
+    def test_data_path_that_mkifs_would_split_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "a b").touch()
+            with self.assertRaises(SystemExit):
+                data_file_entries(Path(tmp))
+
+
 class GuestScriptTests(unittest.TestCase):
     def test_arguments_are_shell_quoted(self):
-        self.assertIn("./t1 'two words' </dev/null", guest_script(TESTS, N))
+        self.assertIn("./e1 'two words' </dev/null", guest_script(TESTS, N))
+
+    def test_user_wraps_each_test_and_owns_the_run_directory(self):
+        script = guest_script(TESTS[:1], N, "qnxuser")
+        self.assertIn("on -u qnxuser ./e0 </dev/null", script)
+        self.assertIn("chown -R qnxuser:$qct_gid /data/data/tests", script)
+        self.assertLess(script.index("chown"), script.index(f"{N}:START:0"))
+        self.assertIn(f"{N}:SETUP_FAILED", script)
+
+    def test_without_user_nothing_changes_owner(self):
+        script = guest_script(TESTS[:1], N)
+        self.assertNotIn("chown", script)
+        self.assertNotIn("on -u", script)
 
     def test_only_environment_values_are_quoted(self):
         test = Test("e", Path("/x"), (), 5, env=("KEY=a b",))
-        self.assertIn("KEY='a b' ./t0 </dev/null", guest_script([test], N))
+        self.assertIn("KEY='a b' ./e0 </dev/null", guest_script([test], N))
 
 
 if __name__ == "__main__":

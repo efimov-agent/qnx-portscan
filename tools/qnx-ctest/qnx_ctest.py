@@ -95,15 +95,42 @@ def discover(build_dir: Path, default_timeout: int) -> list[Test]:
     return tests
 
 
-def guest_script(tests: list[Test], nonce: str) -> str:
+def executable_names(tests: list[Test]) -> dict[Path, str]:
+    """One guest file per distinct executable: suites often run one binary with many arguments."""
+    distinct = dict.fromkeys(t.executable for t in tests if not t.disabled)
+    return {path: f"e{n}" for n, path in enumerate(distinct)}
+
+
+def data_file_entries(root: Path) -> list[str]:
+    """Image entries for a tree of test data, placed relative to the directory the tests run in."""
+    entries = []
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        relative = path.relative_to(root)
+        if re.fullmatch(r"run\.sh|e\d+", str(relative)):
+            raise SystemExit(f"--files: {relative} clashes with a file the runner places there")
+        if re.search(r"[\s,\"'=]", str(path)):
+            raise SystemExit(f"--files: mkifs cannot take the path {path!s}")
+        entries.append(f"[uid=0 gid=0 perms=0644] /data/tests/{relative} = {path}\n")
+    return entries
+
+
+def guest_script(tests: list[Test], nonce: str, user: str | None = None) -> str:
+    guest_names = executable_names(tests)
     lines = [f"cd {GUEST_DIR}", f"echo; echo {nonce}:BEGIN"]
+    if user:
+        quoted = shlex.quote(user)
+        lines.insert(1, (
+            f"qct_gid=$(id -g {quoted}) && chown -R {quoted}:$qct_gid {GUEST_DIR} && on -u {quoted} /bin/sh -c : "
+            f"|| {{ echo; echo {nonce}:SETUP_FAILED; echo {nonce}:DONE; shutdown -b; exit 1; }}"
+        ))
     for i, test in enumerate(tests):
         if test.disabled:
             continue
         # Quote only the value: a quoted "KEY=value" word would be taken for a command name.
         env = (f"{k}={shlex.quote(v)}" for k, v in (e.split("=", 1) for e in test.env))
         args = (shlex.quote(a) for a in test.args)
-        cmd = " ".join((*env, f"./t{i}", *args))
+        runas = ("on", "-u", shlex.quote(user)) if user else ()
+        cmd = " ".join((*env, *runas, f"./{guest_names[test.executable]}", *args))
         lines += [
             f"echo; echo {nonce}:START:{i}",
             f"{cmd} </dev/null 2>&1 &",
@@ -174,7 +201,9 @@ def run_in_sdp(sdp: Path, command: str, cwd: Path) -> None:
         sys.exit(f"image build failed:\n{done.stdout[-2000:]}\n{done.stderr[-2000:]}")
 
 
-def build_image(work: Path, sdp: Path, tests: list[Test], nonce: str, data_size_mb: int) -> Path:
+def build_image(
+    work: Path, sdp: Path, tests: list[Test], nonce: str, data_size_mb: int, files: Path | None, user: str | None
+) -> Path:
     base = "mkqnximage --type=qemu --arch=x86_64 --noprompt"
     size = f"--data-size={data_size_mb}"
     if not (work / "local" / "snippets").is_dir():
@@ -182,16 +211,16 @@ def build_image(work: Path, sdp: Path, tests: list[Test], nonce: str, data_size_
     payload = work / "payload"
     shutil.rmtree(payload, ignore_errors=True)
     payload.mkdir()
-    entries = []
     # The script ships as a file because post_start.custom goes through the C preprocessor,
     # which would rewrite arguments such as __LINE__.
-    (payload / "run.sh").write_text(guest_script(tests, nonce))
+    (payload / "run.sh").write_text(guest_script(tests, nonce, user))
     names = ["run.sh"]
-    for i, test in enumerate(tests):
-        if not test.disabled:
-            shutil.copy2(test.executable, payload / f"t{i}")
-            names.append(f"t{i}")
+    for executable, name in executable_names(tests).items():
+        shutil.copy2(executable, payload / name)
+        names.append(name)
     entries = [f"[uid=0 gid=0 perms=0755] /data/tests/{n} = {payload / n}\n" for n in names]
+    if files is not None:
+        entries += data_file_entries(files)
     snippets = work / "local" / "snippets"
     (snippets / "data_files.custom").write_text("".join(entries))
     (snippets / "post_start.custom").write_text(f"sh {GUEST_DIR}/run.sh\n")
@@ -248,6 +277,8 @@ def main() -> int:
     ap.add_argument("--junit", type=Path, help="write a JUnit XML report here")
     ap.add_argument("--timeout", type=int, default=60, help="seconds per test without a CTest TIMEOUT")
     ap.add_argument("--data-size", type=int, default=64, help="extra MB in the data partition")
+    ap.add_argument("--files", type=Path, help="directory whose contents are placed where the tests run")
+    ap.add_argument("--user", help="guest user to run the tests as, e.g. qnxuser (default: root)")
     ap.add_argument("--memory", type=int, default=1024, help="guest memory in MB")
     args = ap.parse_args()
     if args.timeout <= 0:
@@ -269,16 +300,23 @@ def main() -> int:
     except BlockingIOError:
         sys.exit(f"another run is using {work}; pass a different --work")
     nonce = "QCT" + secrets.token_hex(6)
-    disk = build_image(work, args.sdp.resolve(), tests, nonce, args.data_size)
+    files = args.files.resolve() if args.files else None
+    if files is not None and not files.is_dir():
+        sys.exit(f"--files: {files} is not a directory")
+    disk = build_image(work, args.sdp.resolve(), tests, nonce, args.data_size, files, args.user)
     serial = work / "serial.log"
     finished = boot_and_wait(disk, serial, nonce, BOOT_MARGIN_S + sum(t.timeout_s for t in tests), args.memory)
     log = serial.read_bytes().decode("utf-8", errors="replace") if serial.exists() else ""
+    if re.search(rf"^{nonce}:SETUP_FAILED\r?$", log, re.M):
+        sys.exit(f"guest setup failed for --user {args.user}; serial log: {serial}")
     results = parse_serial(log, tests, nonce)
 
     for r in results:
         print(f"{r.status.upper():8} {r.test.name}" + (f" (exit {r.exit_code})" if r.exit_code else ""))
     counts = {status: sum(r.status == status for r in results) for status in OK_STATUSES}
+    bad = sum(r.status not in OK_STATUSES for r in results)
     summary = ", ".join(f"{n} {status}" for status, n in counts.items() if n) or "none passed"
+    summary += f", {bad} not ok" if bad else ""
     print(f"{summary} of {len(results)} on QNX; serial log: {serial}")
     if not finished:
         print("guest did not reach the end of the test list before the deadline", file=sys.stderr)
