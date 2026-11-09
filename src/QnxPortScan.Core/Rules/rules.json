@@ -818,6 +818,21 @@
     "docs": []
   },
   {
+    "id": "QNX056",
+    "title": "SOCK_MAXADDRLEN-sized address",
+    "kind": "Identifier",
+    "severity": "Warning",
+    "category": "net",
+    "patterns": [
+      "SOCK_MAXADDRLEN"
+    ],
+    "message": "QNX 8.0 defines SOCK_MAXADDRLEN as 255, but bind() and connect() on AF_UNIX reject an address length above sizeof(struct sockaddr_un) (106) with EINVAL (measured in an SDP 8.0 guest).",
+    "suggestion": "On QNX size the path buffer with sizeof(((struct sockaddr_un*)0)->sun_path) and pass an address length no larger than sizeof(struct sockaddr_un).",
+    "docs": [
+      "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.io_sock/topic/socket_api.html"
+    ]
+  },
+  {
     "id": "QNX047",
     "title": "Linux /proc files",
     "kind": "Literal",

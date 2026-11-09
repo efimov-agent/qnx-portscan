@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
 # Cross-builds libuv with qcc and runs each of its tests in a throwaway QNX 8.0 guest.
-# Usage: run.sh [work-dir]   (default /tmp/qnx-libuv); results land in <work-dir>/junit.xml
+# Usage: run.sh [work-dir] [extra.patch]   (default /tmp/qnx-libuv); results land in <work-dir>/junit.xml
 set -euo pipefail
 export PYTHONDONTWRITEBYTECODE=1
 here=$(cd "$(dirname "$0")" && pwd)
 tools=$(cd "$here/../.." && pwd)
 work=${1:-/tmp/qnx-libuv}
+extra=${2:+$(realpath "$2")}
 sdp=${QNX_SDP:-$HOME/qnx800}
 commit=9e40720a0cdfd99970eacc43b39fa1404c6df38d
 source "$sdp/qnxsdp-env.sh" >/dev/null
 
 mkdir -p "$work"
-if [ ! -f "$work/src/.qnx-patched" ]; then
+if [ ! -f "$work/src/.qnx-patched" ] || [ "$(cat "$work/src/.qnx-patched")" != "$extra" ]; then
   rm -rf "$work/src"
   git init -q "$work/src"
   git -C "$work/src" fetch -q --depth 1 https://github.com/libuv/libuv "$commit"
   git -C "$work/src" checkout -q FETCH_HEAD
   git -C "$work/src" apply "$here/qnx-sdp8.patch"
-  touch "$work/src/.qnx-patched"
+  if [ -n "$extra" ]; then git -C "$work/src" apply "$extra"; fi
+  printf '%s\n' "$extra" >"$work/src/.qnx-patched"
 fi
 cmake -S "$work/src" -B "$work/build" -DCMAKE_TOOLCHAIN_FILE="$tools/qnx-x86_64.cmake" -DBUILD_TESTING=ON >/dev/null
 cmake --build "$work/build" -j"$(nproc)" --target uv_run_tests_a >/dev/null

@@ -136,6 +136,10 @@ r("QNX054","Other Linux /proc files","Literal","Warning","procfs",[r"^/proc/(sta
 r("QNX055","Linux arch headers","Include","Warning","headers",["asm/"],
   "<asm/...> are Linux kernel arch headers; QNX SDP 8.0 is not expected to ship them (not individually verified).",
   "Guard with #ifdef __linux__; use compiler builtins or <sys/neutrino.h> facilities instead.", [])
+r("QNX056","SOCK_MAXADDRLEN-sized address","Identifier","Warning","net",["SOCK_MAXADDRLEN"],
+  "QNX 8.0 defines SOCK_MAXADDRLEN as 255, but bind() and connect() on AF_UNIX reject an address length above sizeof(struct sockaddr_un) (106) with EINVAL (measured in an SDP 8.0 guest).",
+  "On QNX size the path buffer with sizeof(((struct sockaddr_un*)0)->sun_path) and pass an address length no larger than sizeof(struct sockaddr_un).",
+  [IOS])
 r("QNX047","Linux /proc files","Literal","Error","procfs",[r"^/proc/(cpuinfo|meminfo)"],
   "QNX /proc only has per-process directories (as, cmdline, ctl, exefile, mappings, pmap, vmstat); /proc/cpuinfo and /proc/meminfo do not exist.",
   "CPU/memory info: system page (_syspage_ptr, SYSPAGE_CPU_ENTRY), SchedGetCpuNum(), devctl DCMD_PROC_SYSINFO.",

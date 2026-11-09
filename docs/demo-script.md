@@ -19,7 +19,7 @@ Command:
 qnx-portscan --help
 qnx-portscan rules | head -20
 ```
-Narration: "55 rules, all generated from the QNX SDP 8.0 docs — not guesswork.
+Narration: "56 rules, all generated from the QNX SDP 8.0 docs — not guesswork.
 Each one carries a severity, a suggested replacement, and a link back to the
 canonical QNX reference page." Highlight: `rules` output shows id/severity/title.
 

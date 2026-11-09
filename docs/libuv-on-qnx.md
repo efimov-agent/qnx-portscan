@@ -44,8 +44,31 @@ Exit status 7 is libuv's "skipped", declared with `SKIP_RETURN_CODE`.
 Of the 43 skips, 22 are filesystem watching, which libuv does not support on this platform.
 The others include tests for other operating systems and tests that depend on the run environment.
 
-26 of the 34 failures report `EINVAL`, nearly all from the Unix-domain socket operations `uv_pipe_bind` and
-`uv_pipe_connect`. The cause has not been established yet. The remaining 8 are `fs_chown`, `platform_output`,
-`poll_duplex`, `poll_unidirectional`, `tcp_connect_timeout`, `udp_multicast_join`, and two that hit libuv's own
-test timeout (`udp_mmsg`, `fs_write_alotof_bufs_with_offset`; the runner reports these as failed, as libuv exits non-zero).
-None of these failures have been analysed as bugs in libuv or in QNX.
+The remaining 8 of the original 34 are `fs_chown`, `platform_output`, `poll_duplex`, `poll_unidirectional`,
+`tcp_connect_timeout`, `udp_multicast_join`, and two that hit libuv's own test timeout (`udp_mmsg`,
+`fs_write_alotof_bufs_with_offset`; the runner reports these as failed, as libuv exits non-zero).
+
+26 of the 34 failures report `EINVAL`. 20 of them have one confirmed cause, the size of the Unix-domain socket address.
+libuv sizes its path buffer with `SOCK_MAXADDRLEN` where that macro exists and, for filesystem paths, passes the size of
+the whole buffer to `bind()` and `connect()`. QNX 8.0 defines the macro as 255, but a probe in the guest
+(`tools/qnx-ctest/examples/libuv/probe/sun_probe.c`) shows that `AF_UNIX` accepts an address length up to
+`sizeof(struct sockaddr_un)`, 106 bytes, and returns `EINVAL` from 107 upwards.
+
+`qnx-sockaddr-un.patch` is one line: it makes libuv use `sizeof(sun_path)` on QNX. To apply it:
+
+```
+tools/qnx-ctest/examples/libuv/run.sh /tmp/qnx-libuv-fix tools/qnx-ctest/examples/libuv/qnx-sockaddr-un.patch
+```
+
+| | without the patch | with the patch |
+|---|---|---|
+| passed | 413 | 433 |
+| skipped | 43 | 43 |
+| failed | 34 | 14 |
+
+No test that passed before fails with the patch. The scanner reports this case as rule `QNX056`.
+
+Of the 14 that remain, `spawn_detached` and `tty_pty_partial` still fail with `EINVAL`, outside the socket code.
+`pipe_bind_error_addrnotavail`, `pipe_connect_to_file`, `pipe_getsockname` and `pipe_getsockname_long_path` were among
+the 26 and still fail; three of them now stop on a different error or value, and `pipe_connect_to_file` still gets `EINVAL`. The other 8 are the failures listed above.
+The causes of these 14 have not been established, and none has been analysed as a bug in libuv or in QNX.

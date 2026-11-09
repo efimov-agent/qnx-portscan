@@ -1,0 +1,7 @@
+--- a/src/unix/pipe.c
++++ b/src/unix/pipe.c
+@@ -36,3 +36,3 @@
+      */
+-#if defined(SOCK_MAXADDRLEN) && !defined(__FreeBSD__)
++#if defined(SOCK_MAXADDRLEN) && !defined(__FreeBSD__) && !defined(__QNX__)
+     char path[SOCK_MAXADDRLEN - offsetof(struct sockaddr_un, sun_path)];
