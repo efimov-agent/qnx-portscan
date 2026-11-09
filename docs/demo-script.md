@@ -19,7 +19,7 @@ Command:
 qnx-portscan --help
 qnx-portscan rules | head -20
 ```
-Narration: "56 rules, all generated from the QNX SDP 8.0 docs — not guesswork.
+Narration: "56 rules, checked against the QNX SDP 8.0 docs and a real guest — not guesswork.
 Each one carries a severity, a suggested replacement, and a link back to the
 canonical QNX reference page." Highlight: `rules` output shows id/severity/title.
 
@@ -30,7 +30,7 @@ git clone --depth 1 https://github.com/libuv/libuv ~/demo/libuv
 qnx-portscan scan ~/demo/libuv --format both --out ~/demo/libuv-report
 ```
 Narration: "Point it at libuv — a library that already has partial QNX support.
-378 files, scanned in a second." Show the console summary: **25 findings**,
+378 files, scanned in a second." Show the console summary: **28 findings**,
 19 errors. Then open the Markdown report.
 
 Highlight these lines (from `docs/demo/libuv.md`):

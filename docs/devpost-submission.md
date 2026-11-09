@@ -29,7 +29,7 @@ Run against seven well-known open-source codebases (default settings, shallow cl
 
 | Project | Files | Findings | Errors |
 |---|---:|---:|---:|
-| libuv | 378 | 25 | 19 |
+| libuv | 378 | 28 | 19 |
 | redis | 856 | 59 | 44 |
 | mosquitto | 605 | 7 | 2 |
 | libzmq | 465 | 18 | 13 |

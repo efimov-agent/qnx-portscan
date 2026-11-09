@@ -6,20 +6,23 @@ export PYTHONDONTWRITEBYTECODE=1
 here=$(cd "$(dirname "$0")" && pwd)
 tools=$(cd "$here/../.." && pwd)
 work=${1:-/tmp/qnx-libuv}
+if [ -n "${2:-}" ] && [ ! -f "$2" ]; then echo "no such patch: $2" >&2; exit 2; fi
 extra=${2:+$(realpath "$2")}
 sdp=${QNX_SDP:-$HOME/qnx800}
 commit=9e40720a0cdfd99970eacc43b39fa1404c6df38d
 source "$sdp/qnxsdp-env.sh" >/dev/null
 
 mkdir -p "$work"
-if [ ! -f "$work/src/.qnx-patched" ] || [ "$(cat "$work/src/.qnx-patched")" != "$extra" ]; then
+# The marker holds the patches' content hash, so editing a patch in place also rebuilds the tree.
+stamp=$(cat "$here/qnx-sdp8.patch" ${extra:+"$extra"} | sha256sum)
+if [ ! -f "$work/src/.qnx-patched" ] || [ "$(cat "$work/src/.qnx-patched")" != "$stamp" ]; then
   rm -rf "$work/src"
   git init -q "$work/src"
   git -C "$work/src" fetch -q --depth 1 https://github.com/libuv/libuv "$commit"
   git -C "$work/src" checkout -q FETCH_HEAD
   git -C "$work/src" apply "$here/qnx-sdp8.patch"
   if [ -n "$extra" ]; then git -C "$work/src" apply "$extra"; fi
-  printf '%s\n' "$extra" >"$work/src/.qnx-patched"
+  printf '%s\n' "$stamp" >"$work/src/.qnx-patched"
 fi
 cmake -S "$work/src" -B "$work/build" -DCMAKE_TOOLCHAIN_FILE="$tools/qnx-x86_64.cmake" -DBUILD_TESTING=ON >/dev/null
 cmake --build "$work/build" -j"$(nproc)" --target uv_run_tests_a >/dev/null

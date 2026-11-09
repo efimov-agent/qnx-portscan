@@ -1,6 +1,6 @@
 # QNX portability report: libuv
 
-Files scanned: **378** · Findings: **25** (errors 19, warnings 0, notes 6)
+Files scanned: **378** · Findings: **28** (errors 19, warnings 3, notes 6)
 
 Files already mentioning `__QNX__`/`__QNXNTO__`: 18
 
@@ -18,6 +18,7 @@ Files already mentioning `__QNX__`/`__QNXNTO__`: 18
 | QNX004 | Error | kqueue | 1 | 1 |
 | QNX048 | Error | /proc/self/exe | 1 | 1 |
 | QNX025 | Error | sched_getcpu() | 1 | 1 |
+| QNX056 | Warning | SOCK_MAXADDRLEN (check AF_UNIX address length) | 3 | 2 |
 | QNX044 | Note | SOCK_NONBLOCK/SOCK_CLOEXEC | 6 | 2 |
 
 ## How to port
@@ -110,6 +111,14 @@ QNX has /proc/<pid>/exefile instead of the Linux exe symlink; per a QNX forum an
 
 Docs: <https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/process_proc_filesystem.html> · <https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.lib_ref/topic/c/_cmdname.html>
 
+### QNX056: SOCK_MAXADDRLEN (check AF_UNIX address length)
+
+QNX 8.0 defines SOCK_MAXADDRLEN as 255, but bind() and connect() returned EINVAL for AF_UNIX address lengths above sizeof(struct sockaddr_un) (106) at every length tested in an SDP 8.0 guest. A plain buffer of this size is harmless.
+
+**Suggestion:** Check that this size does not reach bind() or connect() as an AF_UNIX address length; if it does, cap the length at sizeof(struct sockaddr_un) on QNX.
+
+Docs: <https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.io_sock/topic/socket_api.html>
+
 ## Findings by file
 
 ### `src/unix/core.c`
@@ -124,6 +133,10 @@ Docs: <https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/p
 
 - L83:12 **QNX041** `sys/statfs.h` — `# include <sys/statfs.h>`
 - L684:12 **QNX040** `statfs` — `if (0 != statfs(req->path, &buf))`
+
+### `src/unix/pipe.c`
+
+- L40:15 **QNX056** `SOCK_MAXADDRLEN` — `char path[SOCK_MAXADDRLEN - offsetof(struct sockaddr_un, sun_path)];`
 
 ### `src/unix/process.c`
 
@@ -160,3 +173,8 @@ Docs: <https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.prog/topic/p
 - L251:7 **QNX023** `pthread_getaffinity_np` — `r = pthread_getaffinity_np(*tid, sizeof(cpuset), &cpuset);`
 - L256:20 **QNX024** `CPU_ISSET` — `cpumask[i] = !!CPU_ISSET(i, &cpuset);`
 - L280:9 **QNX025** `sched_getcpu` — `cpu = sched_getcpu();`
+
+### `test/test-pipe-getsockname.c`
+
+- L388:13 **QNX056** `SOCK_MAXADDRLEN` — `char path[SOCK_MAXADDRLEN - offsetof(struct sockaddr_un, sun_path) + 1];`
+- L389:13 **QNX056** `SOCK_MAXADDRLEN` — `char name[SOCK_MAXADDRLEN - offsetof(struct sockaddr_un, sun_path) + 1];`

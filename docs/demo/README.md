@@ -12,7 +12,7 @@ done
 
 | Project | Files | Findings | Errors | Notes |
 |---|---:|---:|---:|---:|
-| [libuv](libuv.md) | 378 | 25 | 19 | 6 |
+| [libuv](libuv.md) | 378 | 28 | 19 | 6 |
 | [redis](redis.md) | 856 | 59 | 44 | 8 |
 | [mosquitto](mosquitto.md) | 605 | 7 | 2 | 5 |
 | [libzmq](libzmq.md) | 465 | 18 | 13 | 5 |

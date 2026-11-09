@@ -10,7 +10,7 @@ dotnet run --project src/QnxPortScan.Cli -- rules
 ```
 
 ## What it checks
-56 rules (`tools/gen_rules.py` → `Rules/rules.json`) checked against the QNX SDP 8.0 C Library Reference:
+56 rules (`tools/gen_rules.py` → `Rules/rules.json`) checked against the QNX SDP 8.0 C Library Reference (QNX056 was measured in an SDP 8.0 guest):
 epoll, kqueue, eventfd, signalfd, timerfd, inotify (libfsnotify caveats), prctl, sendfile/splice, clone/namespaces,
 raw `syscall()`, sysinfo, CPU affinity (`cpu_set_t`), `sched_getcpu`, mremap, memfd_create, getrandom, getauxval,
 glibc backtrace, ptrace, io_uring, `<mntent.h>`, statfs, dup3, O_PATH, MAP_POPULATE, Linux `/proc` and `/sys` paths,
