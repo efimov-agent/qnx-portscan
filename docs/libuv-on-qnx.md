@@ -49,7 +49,7 @@ libuv sizes its path buffer with `SOCK_MAXADDRLEN` where that macro exists and, 
 the whole buffer to `bind()` and `connect()`. QNX 8.0 defines the macro as 255, but a probe in the guest
 (`tools/qnx-ctest/examples/libuv/probe/sun_probe.c`) shows that `AF_UNIX` accepts an address length of
 `sizeof(struct sockaddr_un)`, 106 bytes, and returned `EINVAL` at every longer length tested (107 to 110, 128, 200, 254 to 256).
-To repeat it, build the probe with `qcc -Vgcc_ntox86_64 -D_QNX_SOURCE ... -lsocket` and run it in the guest as described above.
+To repeat it, build the probe with `qcc -Vgcc_ntox86_64 -D_QNX_SOURCE -o sun_probe tools/qnx-ctest/examples/libuv/probe/sun_probe.c -lsocket` and run it in the guest as described above.
 
 `qnx-sockaddr-un.patch` is one line: it makes libuv use `sizeof(sun_path)` on QNX. To apply it:
 
