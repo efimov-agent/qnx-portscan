@@ -40,6 +40,28 @@ Paths in `data_files.custom` are relative to the data partition mounted at `/dat
 so `/data/hello` appears in the guest as `/data/data/hello`.
 Rebuild with `mkqnximage --type=qemu --arch=x86_64 --noprompt --force --build`.
 
+## Running a CTest suite in the guest
+`tools/qnx-ctest/qnx_ctest.py` runs the tests of a qcc-built CMake project in a throwaway guest:
+```sh
+. ~/qnx800/qnxsdp-env.sh
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=$PWD/tools/qnx-ctest/qnx-x86_64.cmake
+cmake --build build
+python3 tools/qnx-ctest/qnx_ctest.py build --junit out/junit.xml
+```
+It reads the test list from `ctest --show-only=json-v1`, bakes the executables into an image under
+`~/.cache/qnx-ctest`, boots it, and parses per-test markers from the serial log. The exit code is 0 only
+if every test passed. A test past its CTest `TIMEOUT` (default `--timeout 60`) is killed and reported as a timeout.
+
+CTest properties `DISABLED`, `WILL_FAIL`, `SKIP_RETURN_CODE` and `ENVIRONMENT` are honoured. Properties that decide
+an outcome but cannot be applied (`PASS/FAIL/SKIP_REGULAR_EXPRESSION`, `ENVIRONMENT_MODIFICATION`, `TIMEOUT_AFTER_MATCH`)
+stop the run with an error.
+
+Limits: test executables are copied alone, so shared libraries built by the project, data files, host paths
+in arguments and `WORKING_DIRECTORY` are not carried over; link tests statically or use system libraries.
+The timeout kills only the test process, not processes it spawned. Tests run one by one, in CTest order; `DEPENDS`, `FIXTURES_*` and `REQUIRED_FILES` are ignored, so a test
+whose setup failed still runs. An exit status above 128 counts as a crash and always fails.
+`tools/qnx-ctest/check.sh` is the end-to-end check on a sample suite (needs the SDP and KVM).
+
 ## Known issue
 The generated image prints `/usr/libexec/sshd-auth does not exist or is not executable`
-and sshd does not start, so file transfer over SSH is not available yet.
+and sshd does not start, so file transfer over SSH is not available; the runner above does not need it.
