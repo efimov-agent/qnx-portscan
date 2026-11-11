@@ -1,7 +1,6 @@
 # qnx-portscan — Devpost submission draft
 
 > Draft text for the QNX Everywhere Hackathon (Developer Tooling / Ports-adjacent).
-> Not yet submitted — submission requires myQNX + Devpost accounts (owner registers; reCAPTCHA cannot be automated).
 > Fill the links marked `<…>` before submitting.
 
 ## Elevator pitch (≤ 200 chars)
@@ -62,6 +61,6 @@ How much of a Linux→QNX port is mechanical and knowable in advance, and how QN
 `.net-10` `c#` `c` `c++` `qnx-neutrino` `sarif` `static-analysis` `python`
 
 ## Links
-- Repository: `<github-repo-url>`
+- Repository: https://github.com/efimov-agent/qnx-portscan
 - Demo reports: `docs/demo/`
 - Video: `<youtube-url>` (recording storyboard: `docs/demo-script.md`)

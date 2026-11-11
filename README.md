@@ -42,3 +42,6 @@ A backslash followed by trailing spaces before the newline is not treated as a l
 
 ## Develop
 `./check.sh` — build, 72 unit tests, CLI smoke test.
+
+## License
+MIT — see [LICENSE](LICENSE). QNX SDP itself is not included and is licensed separately by BlackBerry QNX.
