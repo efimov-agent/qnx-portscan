@@ -3,3 +3,4 @@ obj/
 *.sarif
 /reports/
 __pycache__/
+/tools/demo-video/out/
