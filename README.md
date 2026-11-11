@@ -40,8 +40,20 @@ and "not documented" is not proof that a symbol is absent from SDP headers. Conf
 A backslash followed by trailing spaces before the newline is not treated as a line continuation
 (GCC accepts it with a warning), so such a continued `//` comment or directive is read as ending there.
 
+## Build and run on QNX 8.0
+The scanner itself is a host tool (.NET 10 SDK on Linux/macOS/Windows; `./check.sh` builds and tests it).
+Its findings are verified on a real QNX target:
+
+- **QNX version:** QNX Software Development Platform (SDP) 8.0, QNX Neutrino 8.0.
+- **Target:** QEMU x86_64 guest built with `mkqnximage` (KVM, headless) — no hardware needed;
+  setup on Ubuntu 24.04: [docs/qemu-headless.md](docs/qemu-headless.md).
+- **Toolchain:** SDP 8.0 `qcc -Vgcc_ntox86_64` via CMake toolchain file
+  [tools/qnx-ctest/qnx-x86_64.cmake](tools/qnx-ctest/qnx-x86_64.cmake).
+- **Run:** `tools/qnx-ctest/examples/libuv/run.sh /tmp/qnx-libuv` cross-builds libuv, copies the tests into the guest
+  and runs them through the `tools/qnx-ctest` runner — walkthrough and results: [docs/libuv-on-qnx.md](docs/libuv-on-qnx.md).
+
 ## Develop
-`./check.sh` — build, 72 unit tests, CLI smoke test.
+`./check.sh` — build, 77 unit tests, CLI smoke test.
 
 ## License
 MIT — see [LICENSE](LICENSE). QNX SDP itself is not included and is licensed separately by BlackBerry QNX.
