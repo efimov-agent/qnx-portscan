@@ -1,5 +1,7 @@
 # qnx-portscan — Devpost submission draft
 
+> Submitted 2026-11-11 to the QNX Global Hackathon: https://devpost.com/software/qnx-portscan
+
 > Draft text for the QNX Everywhere Hackathon (Developer Tooling / Ports-adjacent).
 > Ready to paste: every field below maps to a field of the Devpost project form.
 
@@ -13,7 +15,7 @@
 | Built with | tags from "Built with" below |
 | "Try it out" links | https://github.com/efimov-agent/qnx-portscan |
 | Image gallery | [`docs/devpost/gallery-1.png` … `gallery-5.png`](devpost/) |
-| Video demo link | the public YouTube URL of `qnx-portscan-demo.mp4` (release v0.1.0) |
+| Video demo link | https://www.youtube.com/watch?v=AY9ACsZy-tc (`qnx-portscan-demo.mp4`, release v0.1.0) |
 | Category (pick one) | **Developer Tooling & Host Tools** |
 | Code repository URL | https://github.com/efimov-agent/qnx-portscan (MIT) |
 | Build and run instructions | section "Build and run on QNX 8.0" below |
@@ -98,4 +100,4 @@ The scanner's prediction was checked end to end (`docs/libuv-on-qnx.md`): libuv 
 ## Links
 - Repository: https://github.com/efimov-agent/qnx-portscan
 - Demo reports: `docs/demo/`
-- Video: YouTube link (to be added); source mp4 in release v0.1.0, built by `tools/demo-video` from real command runs
+- Video: https://www.youtube.com/watch?v=AY9ACsZy-tc; source mp4 in release v0.1.0, built by `tools/demo-video` from real command runs

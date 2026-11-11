@@ -3,6 +3,8 @@
 Static scanner that finds Linux-only APIs in C/C++ code and tells you what to use on **QNX Neutrino (SDP 8.0)** instead.
 Runs on the host (Linux/macOS/Windows, .NET 10) — no QNX SDP needed to get a porting estimate.
 
+Demo video (2:39): https://www.youtube.com/watch?v=AY9ACsZy-tc · Devpost: https://devpost.com/software/qnx-portscan
+
 ```
 dotnet run --project src/QnxPortScan.Cli -- scan ~/src/libuv --exclude test/
 dotnet run --project src/QnxPortScan.Cli -- scan . --format sarif --out qnx.sarif --fail-on error
