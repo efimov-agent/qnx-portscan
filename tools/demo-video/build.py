@@ -125,7 +125,18 @@ BEATS: list[tuple[str, list[Step]]] = [
                  "on the pull request.",
              hl=["exit=1"], min_s=4.0),
     ]),
-    ("5 · Breadth", [
+    ("5 · Runs on QNX 8.0", [
+        Step(cmds=["file qnx-run/uv_run_tests_a | cut -d, -f1,5"],
+             say="Does the advice hold on a real target? We cross-built libuv with the QNX 8.0 toolchain. "
+                 "The first link error was dup3, exactly the call the report flagged.",
+             hl=["ldqnx-64.so.2"]),
+        Step(cmds=["qnx-ctest qnx-run/suite --user qnxuser --files qnx-run/files --work qnx-run/vm"],
+             clear=False, badge="QEMU guest run sped up",
+             say="Our test runner boots a throwaway QNX 8.0 guest in QEMU and runs the tests there. "
+                 "Across libuv's full suite, 433 of 490 tests pass on QNX.",
+             hl=["6 passed of 6 on QNX"]),
+    ]),
+    ("6 · Breadth", [
         Step(cmds=["sed -n '/^| Project/,/^| \\[curl/p' qnx-portscan/docs/demo/README.md",
                    "awk -F'|' '/^\\| \\[/ {s+=$4} END {print \"total findings:\", s}' qnx-portscan/docs/demo/README.md"],
              say="Across seven well-known projects, libuv, redis, mosquitto, libzmq, nginx, sqlite and curl, "
@@ -146,6 +157,7 @@ TTS_FIX = [
     (r"prctl", "P R control"), (r"ifdef", "if-def"), (r"sysinfo", "sys info"), (r"\bCI\b", "C I"),
     (r"ThreadCtl", "thread control"), (r"include-guarded", "include guarded"), (r"sqlite", "S Q lite"),
     (r"nginx", "engine X"), (r"Linux-only", "Linux only"),
+    (r"\bdup3\b", "dup 3"), (r"\bQEMU\b", "Q emu"),
 ]
 
 
@@ -167,7 +179,7 @@ def run_capture(cmd: str) -> str:
             (DEMO / f).unlink()
     p = subprocess.run(["bash", "-c", cmd + " 2>&1"], cwd=DEMO, env=env,
                        capture_output=True, text=True)
-    out = p.stdout.rstrip("\n")
+    out = p.stdout.rstrip("\n").replace(f"{DEMO}/", "")
     for bad in ("/home/", "@", "TOKEN", "KEY="):
         if bad in out:
             raise SystemExit(f"refusing: output of {cmd!r} contains {bad!r}")
@@ -296,10 +308,11 @@ def render(scr: Screen, caption: str, path: Path):
             d.rectangle([cx + 2, cy + 2, cx + CHAR_W, cy + LINE_H - 6], fill=(220, 220, 220))
         if scr.badge:
             bf = ImageFont.truetype(SANS_B, 30)
-            t = f"⏩ {scr.badge}"
+            t = f">> {scr.badge}"
             bw = d.textlength(t, font=bf)
-            d.rounded_rectangle([W - bw - 120, TERM_Y + 80, W - 80, TERM_Y + 130], 10, fill=(200, 60, 60, 230))
-            d.text((W - bw - 100, TERM_Y + 87), t, font=bf, fill=(255, 255, 255))
+            by = TERM_Y + TERM_H - 80
+            d.rounded_rectangle([W - bw - 120, by, W - 80, by + 50], 10, fill=(200, 60, 60, 230))
+            d.text((W - bw - 100, by + 7), t, font=bf, fill=(255, 255, 255))
     if caption:
         cf = ImageFont.truetype(SANS, 38)
         words, lines, cur = caption.split(), [], ""
@@ -390,7 +403,7 @@ def main():
                         outrows += wrap(ln, "out")
                     rows = base + typed + outrows + [(PROMPT, "cmd")]
                     scr = Screen(rows=tuple(rows), label=label,
-                                 badge=step.badge if cmd.startswith("git clone") else None)
+                                 badge=step.badge if cmd == step.cmds[0] else None)
                     timeline.append((tt, scr))
                     tt += 0.9
                 if step.hl:

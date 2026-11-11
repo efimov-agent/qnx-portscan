@@ -36,7 +36,7 @@ Run against seven well-known open-source codebases (default settings, shallow cl
 | sqlite | 359 | 9 | 7 |
 | curl | 1067 | 27 | 18 |
 
-Reports are generated, not hand-edited (see `docs/demo/`). libuv and mosquitto already carry partial QNX support, which is why their counts are lower — the scanner still surfaces the Linux-only call sites a port must revisit. Findings are substantive: `epoll`/`kqueue` event loops and `timerfd` (curl), `cpu_set_t` affinity, raw `syscall()`, `statfs()`, `prctl()`, `O_PATH` (nginx), glibc `backtrace()` and `/proc` reads (sqlite), `getrandom`. Portable code stays quiet: sqlite yields just 9 findings over 359 files, almost all optional diagnostics — the low-false-positive signal a porting team wants.
+Reports are generated, not hand-edited (see `docs/demo/`). libuv and mosquitto already carry partial QNX support, which is why their counts are lower — the scanner still surfaces the Linux-only call sites a port must revisit. Findings are substantive: `epoll`, `timerfd` and `getrandom` (curl), `kqueue` backends (libuv), `cpu_set_t` affinity, raw `syscall()`, `statfs()`, `prctl()`, `O_PATH` (nginx), glibc `backtrace()` and `/proc` reads (sqlite), `getrandom`. Portable code stays quiet: sqlite yields just 9 findings over 359 files, almost all optional diagnostics — the low-false-positive signal a porting team wants.
 
 ## How we built it
 - **.NET 10 / C#**, clean architecture: a line-and-token lexer that strips comments and string literals (handles raw strings and digit separators), a preprocessor-aware guard tracker, a rules engine, and Markdown/SARIF emitters.
@@ -54,7 +54,7 @@ A tool that runs **without the SDP installed** and still gives a credible, repro
 How much of a Linux→QNX port is mechanical and knowable in advance, and how QNX's message-passing primitives (pulses, `MsgSend`, ionotify) map cleanly onto the Linux readiness/eventing APIs people reach for by habit.
 
 ## Proof on a real target: libuv on QNX 8.0
-The scanner's prediction was checked end to end (`docs/libuv-on-qnx.md`): libuv cross-built with SDP 8.0 failed to link on exactly the call the report flagged (`dup3`). With a two-line patch, its test suite ran in a headless **QEMU + SDP 8.0** guest through our `tools/qnx-ctest` runner: 413 of 490 tests passed (43 skipped by libuv itself, 34 failed). The scan of the failures led to a new rule, `QNX056` (Unix-socket path size via `SOCK_MAXADDRLEN`); fixing that case brought it to 433 passed, 14 failed, no regressions. Building the headless SDP image on Ubuntu 24.04 is documented in `docs/qemu-headless.md`.
+The scanner's prediction was checked end to end (`docs/libuv-on-qnx.md`): libuv cross-built with SDP 8.0 first failed to link on exactly the call the report flagged (`dup3`); the other link error was a missing `-lm`, which an API scan can't see. With that two-line patch, its test suite ran in a headless **QEMU + SDP 8.0** guest through our `tools/qnx-ctest` runner: 413 of 490 tests passed (43 skipped by libuv itself, 34 failed). The scan of the failures led to a new rule, `QNX056` (Unix-socket path size via `SOCK_MAXADDRLEN`); fixing that case brought it to 433 passed, 14 failed, no regressions. Building the headless SDP image on Ubuntu 24.04 is documented in `docs/qemu-headless.md`.
 
 ## What's next
 - More rules as we port real packages; community-contributed rule entries.
