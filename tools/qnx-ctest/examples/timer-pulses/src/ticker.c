@@ -30,6 +30,7 @@ ticker_t *ticker_start(long period_ms)
         errno = EINVAL;
         return NULL;
     }
+    int saved;
     ticker_t *t = malloc(sizeof *t);
     if (t == NULL)
         return NULL;
@@ -53,7 +54,6 @@ ticker_t *ticker_start(long period_ms)
         goto fail_timer;
     return t;
 
-    int saved;
 fail_timer:
     saved = errno;
     timer_delete(t->timer);
@@ -84,6 +84,8 @@ int ticker_wait_for(ticker_t *t, long timeout_ms)
         uint64_t ms = (uint64_t)timeout_ms;
         if (ms > MAX_TIMEOUT_MS)
             ms = MAX_TIMEOUT_MS;
+        /* With timeout_ms == 0 the deadline has already passed; in the QNX 8.0 guest the receive then
+         * fails with ETIMEDOUT at once unless a pulse is queued (checked by the catchup test). */
         deadline = timespec2nsec(&now) + ms * 1000000u;
     }
     for (;;) {

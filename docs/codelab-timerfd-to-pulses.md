@@ -131,6 +131,7 @@ On QNX, pulses are queued for the process, so every expiration arrives as its ow
 periods, `ticker_wait_for()` returns 1 five times in a row without blocking. The `catchup` test below checks exactly
 that. (For the same reason `timer_getoverrun()` does not help here: overruns occur only for signals.)
 If your code needs the Linux behaviour, drain the queued ticks with `timeout_ms == 0` and count them.
+Each queued pulse takes kernel memory, so a long stall on a short period grows the queue; drain it promptly.
 
 ## 5. Describe the tests in CMake
 [`CMakeLists.txt`](../tools/qnx-ctest/examples/timer-pulses/CMakeLists.txt) builds the ticker as a static library
@@ -140,7 +141,7 @@ and registers four tests:
 |---|---|
 | `ticks` | 10 ticks of 20 ms arrive and take between 195 ms and 1 s |
 | `timeout` | with a 300 ms period, a 50 ms wait returns 0 after at least 45 ms; a 1 s wait returns the tick |
-| `catchup` | after sleeping for about 5 periods of 20 ms, 4 to 6 ticks are waiting and each returns at once (`timeout_ms == 0`) |
+| `catchup` | after sleeping for about 5 periods of 20 ms, one tick per elapsed period (±1) is waiting and each returns at once (`timeout_ms == 0`) |
 | `bad_period` | `ticker_start(0)` and `ticker_start(-5)` return `NULL` with `errno == EINVAL` |
 
 The library is static on purpose: the test runner copies the test executables into the guest, not shared
@@ -177,7 +178,7 @@ test's output, so you can see the measured times:
 ```
 10 ticks in 201 ms
 first=0 after 51 ms, second=1
-before=0 queued=5
+before=0 queued=5 expected=5
 period=0 ticker=0 errno=22
 period=-5 ticker=0 errno=22
 ```
@@ -193,7 +194,7 @@ self-hosted runner that has the SDP installed.
 | `Could not access KVM kernel module` / permission denied on `/dev/kvm` | Add yourself to the `kvm` group (`sudo usermod -aG kvm $USER`). |
 | A test fails at once and the serial log shows a loader error | A shared library of your project was not copied into the guest. Link it statically. |
 | A test is reported as `timeout` | No tick arrived: check that `it_value` is not zero and that the sigevent uses the connection id (`coid`), not the channel id (`chid`). |
-| `ticks` or `catchup` fails on a heavily loaded host | The guest did not get enough CPU time: `ticks` allows up to 1 s, `catchup` expects 4 to 6 queued ticks. Run with fewer parallel jobs on the host. |
+| `ticks` or `catchup` fails on a heavily loaded host | The guest did not get enough CPU time: `ticks` allows up to 1 s, `catchup` compares the queued ticks with the time that actually passed. Run with fewer parallel jobs on the host. |
 
 ## 8. Where to go next
 - Receive the pulses in the same `MsgReceive()` loop as your other messages: a resource manager or server can
