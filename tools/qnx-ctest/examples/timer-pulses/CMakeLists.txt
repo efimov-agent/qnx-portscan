@@ -6,7 +6,7 @@ enable_testing()
 add_library(ticker STATIC src/ticker.c)
 target_include_directories(ticker PUBLIC src)
 
-foreach(name ticks timeout bad_period)
+foreach(name ticks timeout catchup bad_period)
   add_executable(test_${name} tests/test_${name}.c)
   target_link_libraries(test_${name} PRIVATE ticker)
   add_test(NAME ${name} COMMAND test_${name})

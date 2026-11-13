@@ -35,7 +35,8 @@ The starting point, [`start/ticker.c`](../tools/qnx-ctest/examples/timer-pulses/
 `ticker_start(period_ms)`, `ticker_wait_for(t, timeout_ms)` (1 on a tick, 0 on timeout, -1 on error)
 and `ticker_stop(t)`. It uses a `timerfd` for the period and `poll()` for the timeout.
 
-Try to compile it for QNX:
+All commands from here on run in the example directory, `tools/qnx-ctest/examples/timer-pulses`.
+Try to compile the original for QNX:
 ```sh
 cd tools/qnx-ctest/examples/timer-pulses
 qcc -Vgcc_ntox86_64 -c start/ticker.c
@@ -44,9 +45,9 @@ qcc -Vgcc_ntox86_64 -c start/ticker.c
 start/ticker.c:5:10: fatal error: sys/timerfd.h: No such file or directory
 ```
 The compiler stops at the first problem. To see every Linux-only call at once, and what to use instead,
-run qnx-portscan from the repository root:
+run qnx-portscan on the example. The scanner project lives at the repository root, four levels up:
 ```sh
-dotnet run --project src/QnxPortScan.Cli -- scan tools/qnx-ctest/examples/timer-pulses
+dotnet run --project ../../../../src/QnxPortScan.Cli -- scan .
 ```
 ```
 | QNX009 | Error | timerfd | 2 | 1 |
@@ -67,7 +68,7 @@ That is why the starting file is called `start/ticker.c`.)
 
 ## 2. The QNX model in three objects
 On Linux the kernel turns timer expirations into a readable file descriptor. On QNX the kernel delivers
-them as **pulses**: small, non-blocking messages that carry an 8-bit code and a value.
+them as **pulses**: small, non-blocking messages that carry a signed 8-bit code and a value.
 A pulse travels to a **channel**, the endpoint a QNX thread receives messages on, through a
 **connection** to that channel. A **sigevent** structure tells the timer what to send and where.
 
@@ -96,8 +97,8 @@ timer_settime(t->timer, 0, &its, NULL);
 - `ConnectAttach(0, 0, chid, ...)` connects to a channel in the same process (node 0, pid 0 = self).
   `_NTO_SIDE_CHANNEL` keeps the connection id out of the file-descriptor range, so it cannot collide with `dup2()` or `close()` on fds.
 - `SIGEV_PULSE_INIT` fills the sigevent: send a pulse with code `TICK_CODE` on connection `coid`.
-  Codes from `_PULSE_CODE_MINAVAIL` up are for applications; lower codes are reserved for the system.
-- `SIGEV_PULSE_PRIO_INHERIT` lets the pulse take the priority of the thread that receives it.
+  Applications use codes `_PULSE_CODE_MINAVAIL` to `_PULSE_CODE_MAXAVAIL` (0 to 127); negative codes are reserved for the system.
+- `SIGEV_PULSE_PRIO_INHERIT` makes the thread that receives the pulse run at the initial priority of the process.
   In a real-time design you would pass an explicit priority here instead.
 - `CLOCK_MONOTONIC` is not affected when someone sets the wall clock, same as in the Linux version.
 
@@ -107,10 +108,11 @@ caller would wait forever.
 
 ## 4. Wait for a tick, with a timeout
 On Linux, `poll()` waited for the timerfd with a timeout. On QNX, a thread blocks in `MsgReceivePulse()` on the
-channel, and a kernel timeout bounds that block:
+channel, and a kernel timeout bounds that block. The deadline is computed once, as an absolute time:
 ```c
-uint64_t ns = (uint64_t)timeout_ms * 1000000u;
-TimerTimeout(CLOCK_MONOTONIC, _NTO_TIMEOUT_RECEIVE, NULL, &ns, NULL);
+deadline = timespec2nsec(&now) + ms * 1000000u;
+...
+TimerTimeout(CLOCK_MONOTONIC, _NTO_TIMEOUT_RECEIVE | TIMER_ABSTIME, NULL, &deadline, NULL);
 
 struct _pulse pulse;
 if (MsgReceivePulse(t->chid, &pulse, sizeof pulse, NULL) == -1)
@@ -120,20 +122,26 @@ if (pulse.code == TICK_CODE)
 ```
 `TimerTimeout()` applies to the **next** kernel call of this thread that enters one of the listed blocking
 states, here *receive-blocked*. If the timeout passes first, the call fails with `ETIMEDOUT`. The kernel clears
-the timeout after that call, so it is armed again on every loop iteration.
+the timeout after that call, so it is armed again on every loop iteration. Because the deadline is absolute, a pulse
+with another code cannot stretch the total wait. A negative `timeout_ms` skips `TimerTimeout()` and waits without a
+limit, like `poll(-1)`; `timeout_ms == 0` only takes a tick that is already queued.
 
-One difference from Linux: `read()` on a timerfd returns how many periods expired since the last read. This port
-only reports *that* a tick arrived; if you need the count of missed periods, keep your own clock comparison.
+One difference from Linux: `read()` on a timerfd returns one count of all periods that expired since the last read.
+On QNX, pulses are queued for the process, so every expiration arrives as its own pulse. After a stall of five
+periods, `ticker_wait_for()` returns 1 five times in a row without blocking. The `catchup` test below checks exactly
+that. (For the same reason `timer_getoverrun()` does not help here: overruns occur only for signals.)
+If your code needs the Linux behaviour, drain the queued ticks with `timeout_ms == 0` and count them.
 
 ## 5. Describe the tests in CMake
 [`CMakeLists.txt`](../tools/qnx-ctest/examples/timer-pulses/CMakeLists.txt) builds the ticker as a static library
-and registers three tests:
+and registers four tests:
 
 | Test | What it checks |
 |---|---|
 | `ticks` | 10 ticks of 20 ms arrive and take between 195 ms and 1 s |
 | `timeout` | with a 300 ms period, a 50 ms wait returns 0 after at least 45 ms; a 1 s wait returns the tick |
-| `bad_period` | `ticker_start(0)` returns `NULL` with `errno == EINVAL` |
+| `catchup` | after sleeping for about 5 periods of 20 ms, 4 to 6 ticks are waiting and each returns at once (`timeout_ms == 0`) |
+| `bad_period` | `ticker_start(0)` and `ticker_start(-5)` return `NULL` with `errno == EINVAL` |
 
 The library is static on purpose: the test runner copies the test executables into the guest, not shared
 libraries built by the project. Each test has a CTest `TIMEOUT` of 10 seconds, so a ticker that never fires fails
@@ -156,19 +164,22 @@ collects the results from the serial console:
 ```sh
 python3 ../../qnx_ctest.py /tmp/qnx-timer-pulses --junit /tmp/qnx-timer-pulses/junit.xml
 ```
-(Run it through `sg kvm -c "..."` if your current shell was started before you joined the `kvm` group.)
+If your current shell was started before you joined the `kvm` group, the runner starts QEMU through `sg kvm` itself.
 ```
 PASSED   ticks
 PASSED   timeout
+PASSED   catchup
 PASSED   bad_period
-3 passed of 3 on QNX; serial log: /home/you/.cache/qnx-ctest/serial.log
+4 passed of 4 on QNX; serial log: /home/you/.cache/qnx-ctest/serial.log
 ```
 On the machine above, building the image, booting and running took about 35–50 seconds. The JUnit file keeps each
 test's output, so you can see the measured times:
 ```
 10 ticks in 201 ms
 first=0 after 51 ms, second=1
-ticker=0 errno=22
+before=0 queued=5
+period=0 ticker=0 errno=22
+period=-5 ticker=0 errno=22
 ```
 Steps 5 and 6 together are in one script: `./run.sh [BUILD_DIR]`.
 
@@ -179,15 +190,15 @@ self-hosted runner that has the SDP installed.
 | Symptom | Cause and fix |
 |---|---|
 | `qcc: command not found` | `qnxsdp-env.sh` was not sourced in this shell. |
-| `Could not access KVM kernel module` / permission denied on `/dev/kvm` | Add yourself to the `kvm` group and log in again, or use `sg kvm -c "..."`. |
+| `Could not access KVM kernel module` / permission denied on `/dev/kvm` | Add yourself to the `kvm` group (`sudo usermod -aG kvm $USER`). |
 | A test fails at once and the serial log shows a loader error | A shared library of your project was not copied into the guest. Link it statically. |
 | A test is reported as `timeout` | No tick arrived: check that `it_value` is not zero and that the sigevent uses the connection id (`coid`), not the channel id (`chid`). |
-| `ticks` fails on a heavily loaded host | The 195 ms lower bound is strict, the upper bound is not. Run with fewer parallel jobs on the host. |
+| `ticks` or `catchup` fails on a heavily loaded host | The guest did not get enough CPU time: `ticks` allows up to 1 s, `catchup` expects 4 to 6 queued ticks. Run with fewer parallel jobs on the host. |
 
 ## 8. Where to go next
 - Receive the pulses in the same `MsgReceive()` loop as your other messages: a resource manager or server can
   handle timer ticks and client requests on one channel, with no extra thread.
-- Give the pulse an explicit priority instead of `SIGEV_PULSE_PRIO_INHERIT` so tick handling preempts lower-priority work.
+- Give the pulse an explicit priority instead of `SIGEV_PULSE_PRIO_INHERIT`, so the receiving thread handles ticks at a priority you choose.
 - Scan a larger project with `qnx-portscan` and follow the suggestions it gives for `epoll`, `eventfd` and `inotify`:
   they lead to the same channel-and-pulse model.
 - A larger example of the test runner, the libuv test suite on QNX 8.0: [libuv-on-qnx.md](libuv-on-qnx.md).
