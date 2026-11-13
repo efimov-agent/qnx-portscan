@@ -5,6 +5,8 @@ Runs on the host (Linux/macOS/Windows, .NET 10) — no QNX SDP needed to get a p
 
 Demo video (2:39): https://www.youtube.com/watch?v=AY9ACsZy-tc · Devpost: https://devpost.com/software/qnx-portscan
 
+**Codelab:** [port a Linux `timerfd` ticker to QNX 8.0 pulses and test it in QEMU](docs/codelab-timerfd-to-pulses.md) — 30 minutes, no QNX hardware.
+
 ```
 dotnet run --project src/QnxPortScan.Cli -- scan ~/src/libuv --exclude test/
 dotnet run --project src/QnxPortScan.Cli -- scan . --format sarif --out qnx.sarif --fail-on error
